@@ -1,0 +1,91 @@
+
+
+Contexte & Objectif
+
+Vous devez développer une réplique fidèle du jeu Pac-Man dans son style rétro, en veillant à ce que le code soit hautement maintenable, refactorisé et optimisé. Le jeu doit être compilable et fonctionner sans erreur sur n’importe quel ordinateur (Windows, macOS, Linux). Il devra intégrer une gestion efficace des entrées clavier (pour déplacer Pac-Man) et reproduire les bruitages et musiques originales du jeu.
+
+1. Architecture et Organisation du Projet
+	•	Structure Modulaire :
+Organisez le code en fichiers et modules distincts pour favoriser la maintenabilité et la réutilisation. Par exemple, chaque entité (Pac-Man, fantômes, labyrinthe) et chaque service (entrée clavier, rendu graphique, gestion des sons) doit être isolé dans ses propres fichiers d’implémentation et d’en-tête.
+	•	Design Pattern & Séparation des Responsabilités :
+Utilisez un pattern de type MVC (Modèle-Vue-Contrôleur) ou équivalent pour séparer la logique de jeu, l’interface utilisateur et la gestion des entrées.
+	•	Modèle : Structures de données représentant la grille, le score, l’état du jeu, etc.
+	•	Vue : Rendu graphique (sprites, animations, labyrinthe) et affichage des scores.
+	•	Contrôleur : Gestion des entrées clavier et de la logique de mise à jour (mouvements, collisions, IA des fantômes).
+	•	Organisation des Fichiers (exemple en C++ – à adapter selon le langage choisi) :
+	•	main.cpp : Point d’entrée du programme et boucle de jeu principale.
+	•	Game.hpp/cpp : Gestion globale du jeu, initialisation, boucle principale et états (menu, jeu, pause, etc.).
+	•	Player.hpp/cpp : Implémentation de Pac-Man, gestion des mouvements, collisions et animations.
+	•	Ghost.hpp/cpp : Implémentation des fantômes avec comportements spécifiques (chasse, dispersion, fuite).
+	•	Maze.hpp/cpp : Définition et rendu du labyrinthe (grille, murs, points à collecter).
+	•	InputHandler.hpp/cpp : Gestion centralisée des entrées clavier en temps réel.
+	•	SoundManager.hpp/cpp : Gestion des bruitages et de la musique, en charge du chargement et de la lecture asynchrone des fichiers audio.
+	•	ResourceManager.hpp/cpp (optionnel) : Chargement et gestion des ressources (images, sons) pour éviter les fuites mémoire et optimiser l’accès aux assets.
+	•	Documentation et README :
+Fournissez un fichier README détaillé avec les instructions de compilation, les dépendances, et une description de l’architecture globale. Commentez le code de manière claire et professionnelle, en suivant les conventions du langage utilisé.
+
+2. Fonctionnalités et Spécifications du Jeu
+	•	Mécaniques de Jeu :
+	•	Déplacement : Pac-Man se déplace de manière fluide avec les touches directionnelles du clavier.
+	•	Collisions : Détecter et gérer les collisions entre Pac-Man, les fantômes, et les murs du labyrinthe.
+	•	Collecte d’Objets : Implémenter la collecte de points et d’items spéciaux (gros points permettant de renverser la situation face aux fantômes).
+	•	Intelligence Artificielle des Fantômes :
+	•	Chacun des fantômes doit posséder un comportement distinct (poursuite, dispersion, fuite lors de la consommation d’un gros point).
+	•	Implémenter un système d’états pour l’IA qui gère les transitions entre ces comportements.
+	•	Graphismes et Rendu :
+	•	Rendre le labyrinthe et les sprites de manière fidèle au style rétro original, avec animations fluides.
+	•	Optimiser le rendu pour qu’il soit performant sur toute plateforme, en utilisant par exemple des techniques de double buffering ou de batching selon le framework choisi.
+	•	Audio :
+	•	Intégrer des bruitages et une musique d’ambiance rappelant le jeu original.
+	•	Le SoundManager doit gérer le chargement, la lecture asynchrone et le contrôle des volumes, tout en assurant une compatibilité multiplateforme.
+	•	Interface Utilisateur :
+	•	Afficher le score, le nombre de vies restantes et éventuellement un chronomètre ou le niveau actuel.
+	•	Gérer les transitions d’écran (écran titre, pause, game over) de manière fluide.
+
+3. Qualité, Optimisation et Bonnes Pratiques
+	•	Code Qualité & Refactorisation :
+	•	Rédiger un code clair, bien structuré, et documenté, en utilisant des commentaires explicatifs pour les parties complexes.
+	•	Refactoriser au besoin pour éliminer les redondances et améliorer la lisibilité.
+	•	Optimisation des Performances :
+	•	Assurer une gestion efficace de la mémoire et des ressources (chargement et déchargement des assets).
+	•	Utiliser des algorithmes et structures de données adaptés pour les calculs en temps réel (gestion des collisions, IA, rendu).
+	•	Tests et Validation :
+	•	Mettre en place des tests unitaires et d’intégration pour valider la stabilité du code (tests sur les modules critiques comme la détection de collision ou le comportement des fantômes).
+	•	Assurer une gestion robuste des erreurs et exceptions pour éviter les plantages inattendus.
+	•	Compatibilité & Déploiement :
+	•	Fournir un Makefile ou un script de build (par exemple, CMake pour C++ ou un setup spécifique pour d’autres langages) pour automatiser la compilation.
+	•	Vérifier que le code compile et fonctionne sans erreur sur différentes plateformes.
+
+4. Déroulé de Développement et Instructions Complètes
+	1.	Définition de l’Architecture :
+	•	Esquisser un diagramme UML décrivant les interactions entre les classes (Game, Player, Ghost, Maze, InputHandler, SoundManager).
+	•	Définir l’interface de chaque module avec ses responsabilités précises.
+	2.	Implémentation Initiale :
+	•	Créer les fichiers de base (main, Game, Player, etc.) avec des squelettes de classes et fonctions.
+	•	Mettre en place la boucle de jeu principale dans main.cpp qui appelle les mises à jour et le rendu.
+	3.	Développement Progressif :
+	•	Commencer par implémenter le labyrinthe et le rendu graphique de base.
+	•	Ajouter progressivement Pac-Man avec ses contrôles via InputHandler.
+	•	Intégrer l’IA des fantômes et gérer les interactions entre les entités.
+	•	Mettre en place la gestion des scores et des états du jeu (niveau, game over).
+	4.	Intégration Audio :
+	•	Développer le SoundManager pour charger et jouer les bruitages et la musique.
+	•	Tester la synchronisation des sons avec les actions du jeu (mouvement de Pac-Man, collisions, etc.).
+	5.	Tests et Optimisations :
+	•	Effectuer des tests unitaires sur les modules critiques.
+	•	Optimiser le code en identifiant et en corrigeant les goulets d’étranglement (profilage, refactorisation des boucles et des accès mémoire).
+	6.	Compilation et Déploiement :
+	•	Créer un Makefile ou un script de build pour simplifier la compilation sur différentes plateformes.
+	•	Vérifier sur plusieurs environnements que le jeu se compile sans erreur et que les dépendances sont correctement gérées.
+
+5. Résumé de la Mission
+
+Vous devez livrer un jeu Pac-Man rétro complet, avec :
+	•	Une architecture modulaire (fichiers séparés et classes dédiées) conforme aux meilleures pratiques de développement.
+	•	Un code optimisé et refactorisé pour des performances maximales et une haute maintenabilité.
+	•	Une gestion précise des entrées clavier pour une expérience utilisateur fluide.
+	•	Une intégration fidèle des bruitages et de la musique d’origine.
+	•	Une compatibilité assurée sur tous types d’ordinateurs, accompagnée d’un système de build automatisé.
+	•	Une documentation exhaustive (README, commentaires, diagrammes UML) pour faciliter la compréhension et la maintenance du code.
+
+Ce prompt représente l’instruction complète pour la création d’un jeu Pac-Man rétro de qualité professionnelle. Veillez à respecter chaque détail afin d’assurer la robustesse, la portabilité et la fidélité à l’expérience originale. Bonne implémentation !
