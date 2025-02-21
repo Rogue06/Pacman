@@ -12,16 +12,47 @@ export class Maze {
     private dots: number = 0;
 
     constructor() {
-        // Définition du labyrinthe basée sur l'image de référence
-        this.grid = [
-            // 28x31 grille (448x496 pixels)
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-            [1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1],
-            // ... (nous compléterons la grille complète plus tard)
-        ].map(row => row.map(cell => {
+        // 1 = mur, 2 = pac-gomme, 3 = super pac-gomme, 4 = maison des fantômes, 0 = chemin vide
+        const layout = [
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+            [1,2,2,2,2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2,2,2,2,1],
+            [1,2,1,1,1,1,2,1,1,1,1,1,2,1,1,2,1,1,1,1,1,2,1,1,1,1,2,1],
+            [1,3,1,1,1,1,2,1,1,1,1,1,2,1,1,2,1,1,1,1,1,2,1,1,1,1,3,1],
+            [1,2,1,1,1,1,2,1,1,1,1,1,2,1,1,2,1,1,1,1,1,2,1,1,1,1,2,1],
+            [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+            [1,2,1,1,1,1,2,1,1,2,1,1,1,1,1,1,1,1,2,1,1,2,1,1,1,1,2,1],
+            [1,2,1,1,1,1,2,1,1,2,1,1,1,1,1,1,1,1,2,1,1,2,1,1,1,1,2,1],
+            [1,2,2,2,2,2,2,1,1,2,2,2,2,1,1,2,2,2,2,1,1,2,2,2,2,2,2,1],
+            [1,1,1,1,1,1,2,1,1,1,1,1,0,1,1,0,1,1,1,1,1,2,1,1,1,1,1,1],
+            [1,1,1,1,1,1,2,1,1,1,1,1,0,1,1,0,1,1,1,1,1,2,1,1,1,1,1,1],
+            [1,1,1,1,1,1,2,1,1,0,0,0,0,0,0,0,0,0,0,1,1,2,1,1,1,1,1,1],
+            [1,1,1,1,1,1,2,1,1,0,1,1,1,4,4,1,1,1,0,1,1,2,1,1,1,1,1,1],
+            [1,1,1,1,1,1,2,1,1,0,1,0,0,0,0,0,0,1,0,1,1,2,1,1,1,1,1,1],
+            [0,0,0,0,0,0,2,0,0,0,1,0,0,0,0,0,0,1,0,0,0,2,0,0,0,0,0,0],
+            [1,1,1,1,1,1,2,1,1,0,1,0,0,0,0,0,0,1,0,1,1,2,1,1,1,1,1,1],
+            [1,1,1,1,1,1,2,1,1,0,1,1,1,1,1,1,1,1,0,1,1,2,1,1,1,1,1,1],
+            [1,1,1,1,1,1,2,1,1,0,0,0,0,0,0,0,0,0,0,1,1,2,1,1,1,1,1,1],
+            [1,1,1,1,1,1,2,1,1,0,1,1,1,1,1,1,1,1,0,1,1,2,1,1,1,1,1,1],
+            [1,2,2,2,2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2,2,2,2,1],
+            [1,2,1,1,1,1,2,1,1,1,1,1,2,1,1,2,1,1,1,1,1,2,1,1,1,1,2,1],
+            [1,2,1,1,1,1,2,1,1,1,1,1,2,1,1,2,1,1,1,1,1,2,1,1,1,1,2,1],
+            [1,3,2,2,1,1,2,2,2,2,2,2,2,0,0,2,2,2,2,2,2,2,1,1,2,2,3,1],
+            [1,1,1,2,1,1,2,1,1,2,1,1,1,1,1,1,1,1,2,1,1,2,1,1,2,1,1,1],
+            [1,1,1,2,1,1,2,1,1,2,1,1,1,1,1,1,1,1,2,1,1,2,1,1,2,1,1,1],
+            [1,2,2,2,2,2,2,1,1,2,2,2,2,1,1,2,2,2,2,1,1,2,2,2,2,2,2,1],
+            [1,2,1,1,1,1,1,1,1,1,1,1,2,1,1,2,1,1,1,1,1,1,1,1,1,1,2,1],
+            [1,2,1,1,1,1,1,1,1,1,1,1,2,1,1,2,1,1,1,1,1,1,1,1,1,1,2,1],
+            [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+        ];
+
+        // Conversion de la grille numérique en TileType
+        this.grid = layout.map(row => row.map(cell => {
             switch(cell) {
                 case 1: return TileType.WALL;
-                case 2: return TileType.DOT;
+                case 2: 
+                    this.dots++;
+                    return TileType.DOT;
                 case 3: return TileType.POWER_PELLET;
                 case 4: return TileType.GHOST_HOUSE;
                 default: return TileType.PATH;
@@ -39,9 +70,11 @@ export class Maze {
                 switch (tile) {
                     case TileType.WALL:
                         // Dessin des murs en bleu néon
+                        ctx.fillStyle = '#000033';
+                        ctx.fillRect(pixelX, pixelY, this.TILE_SIZE, this.TILE_SIZE);
                         ctx.strokeStyle = '#0000FF';
                         ctx.lineWidth = 2;
-                        ctx.strokeRect(pixelX, pixelY, this.TILE_SIZE, this.TILE_SIZE);
+                        ctx.strokeRect(pixelX + 1, pixelY + 1, this.TILE_SIZE - 2, this.TILE_SIZE - 2);
                         break;
                     case TileType.DOT:
                         // Dessin des pac-gommes
@@ -68,6 +101,14 @@ export class Maze {
                             Math.PI * 2
                         );
                         ctx.fill();
+                        break;
+                    case TileType.GHOST_HOUSE:
+                        // Dessin de la maison des fantômes
+                        ctx.fillStyle = '#000033';
+                        ctx.fillRect(pixelX, pixelY, this.TILE_SIZE, this.TILE_SIZE);
+                        ctx.strokeStyle = '#0000FF';
+                        ctx.lineWidth = 1;
+                        ctx.strokeRect(pixelX, pixelY, this.TILE_SIZE, this.TILE_SIZE);
                         break;
                 }
             }
