@@ -6,6 +6,7 @@ import { Blinky } from '../entities/ghosts/Blinky';
 import { Pinky } from '../entities/ghosts/Pinky';
 import { Inky } from '../entities/ghosts/Inky';
 import { Clyde } from '../entities/ghosts/Clyde';
+import { Ghost } from '../entities/Ghost';
 
 export enum GameState {
     STARTING,   // Animation de début
@@ -36,6 +37,8 @@ export class Game {
     private stateTimer: number = 0;
     private readonly START_DELAY: number = 2000; // 2 secondes d'attente au début
     private readonly DEATH_ANIMATION_DURATION: number = 1500; // 1.5 secondes pour l'animation de mort
+    private ghostEatenCount: number = 0; // Compte les fantômes mangés pendant un Power Pellet
+    private readonly GHOST_SCORE_MULTIPLIER: number = 2; // Le score est doublé pour chaque fantôme consécutif
 
     constructor() {
         this.canvas = document.createElement('canvas');
@@ -80,7 +83,8 @@ export class Game {
         this.pacman = new Pacman(
             14 * this.maze.getTileSize(),
             23 * this.maze.getTileSize(),
-            this.maze
+            this.maze,
+            this
         );
         this.blinky = new Blinky(
             14 * this.maze.getTileSize(),
@@ -108,6 +112,7 @@ export class Game {
             this.pacman
         );
         
+        this.ghostEatenCount = 0;
         this.gameState = GameState.STARTING;
         this.stateTimer = this.START_DELAY;
         
@@ -138,7 +143,7 @@ export class Game {
                 const pacmanBounds = this.pacman.getBounds();
                 const ghostCollision = this.checkGhostCollisions(pacmanBounds);
                 
-                if (ghostCollision) {
+                if (ghostCollision === true) {
                     this.lives--;
                     // Arrêter la sirène et jouer le son de mort
                     this.soundManager.stopSiren();
@@ -175,15 +180,14 @@ export class Game {
         }
     }
 
-    private checkGhostCollisions(pacmanBounds: any): boolean {
+    private checkGhostCollisions(pacmanBounds: any): boolean | void {
         const ghosts = [this.blinky, this.pinky, this.inky, this.clyde];
         
         for (const ghost of ghosts) {
             const ghostBounds = ghost.getBounds();
             if (this.checkCollision(pacmanBounds, ghostBounds)) {
                 if (ghost.isVulnerable()) {
-                    ghost.reset();
-                    this.pacman.addScore(200);
+                    this.handleGhostEaten(ghost);
                     return false;
                 }
                 return true;
@@ -191,6 +195,21 @@ export class Game {
         }
         
         return false;
+    }
+
+    private handleGhostEaten(ghost: Ghost): void {
+        ghost.reset();
+        // Calculer le score basé sur le nombre de fantômes mangés
+        const score = 200 * Math.pow(this.GHOST_SCORE_MULTIPLIER, this.ghostEatenCount);
+        this.pacman.addScore(score);
+        this.ghostEatenCount++;
+        this.soundManager.playSound(SoundEffect.GHOST_EAT);
+    }
+
+    public activatePowerMode(): void {
+        this.ghostEatenCount = 0; // Réinitialiser le compteur
+        const ghosts = [this.blinky, this.pinky, this.inky, this.clyde];
+        ghosts.forEach(ghost => ghost.setFrightened());
     }
 
     private render(): void {

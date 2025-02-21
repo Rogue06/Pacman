@@ -2,9 +2,11 @@ import { Entity, Direction } from './Entity';
 import { InputManager } from '../managers/InputManager';
 import { SoundManager, SoundEffect } from '../managers/SoundManager';
 import { Maze } from './Maze';
+import { Game } from '../core/Game';
 
 export class Pacman extends Entity {
     private maze: Maze;
+    private game: Game;
     private inputManager: InputManager;
     private soundManager: SoundManager;
     private angle: number = 0;
@@ -14,9 +16,10 @@ export class Pacman extends Entity {
     private lastDotTime: number = 0;
     private readonly DOT_SOUND_DELAY: number = 150; // Délai minimum entre deux sons de pac-gomme
 
-    constructor(x: number, y: number, maze: Maze) {
+    constructor(x: number, y: number, maze: Maze, game: Game) {
         super(x, y, 16, 16, 2); // Taille 16x16 pixels, vitesse 2
         this.maze = maze;
+        this.game = game;
         this.inputManager = InputManager.getInstance();
         this.soundManager = SoundManager.getInstance();
     }
@@ -59,7 +62,7 @@ export class Pacman extends Entity {
         if (this.maze.consumePowerPellet(this.x, this.y)) {
             this.score += 50;
             this.soundManager.playSound(SoundEffect.POWER_PELLET);
-            // TODO: Activer le mode vulnérable des fantômes
+            this.game.activatePowerMode();
         }
     }
 
