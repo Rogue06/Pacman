@@ -101,4 +101,8 @@ export class Pacman extends Entity {
     public addScore(points: number): void {
         this.score += points;
     }
+
+    public getDirection(): Direction {
+        return this.direction;
+    }
 } 

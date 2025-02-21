@@ -2,6 +2,7 @@ import { Maze } from '../entities/Maze';
 import { Pacman } from '../entities/Pacman';
 import { InputManager } from '../managers/InputManager';
 import { Blinky } from '../entities/ghosts/Blinky';
+import { Pinky } from '../entities/ghosts/Pinky';
 
 export enum GameState {
     STARTING,   // Animation de début
@@ -21,6 +22,7 @@ export class Game {
     private maze!: Maze;
     private pacman!: Pacman;
     private blinky!: Blinky;
+    private pinky!: Pinky;
     private inputManager!: InputManager;
 
     private lives: number = 3;
@@ -63,6 +65,12 @@ export class Game {
             this.maze,
             this.pacman
         );
+        this.pinky = new Pinky(
+            14 * this.maze.getTileSize(),
+            14 * this.maze.getTileSize(), // Position légèrement plus basse que Blinky
+            this.maze,
+            this.pacman
+        );
         
         this.gameState = GameState.STARTING;
         this.stateTimer = this.START_DELAY;
@@ -81,27 +89,22 @@ export class Game {
             case GameState.PLAYING:
                 this.pacman.update(deltaTime);
                 this.blinky.update(deltaTime);
+                this.pinky.update(deltaTime);
 
-                // Vérifier la collision avec Blinky
+                // Vérifier les collisions avec les fantômes
                 const pacmanBounds = this.pacman.getBounds();
-                const blinkyBounds = this.blinky.getBounds();
-
-                if (this.checkCollision(pacmanBounds, blinkyBounds)) {
-                    if (this.blinky.isVulnerable()) {
-                        this.blinky.reset();
-                        this.pacman.addScore(200);
+                const ghostCollision = this.checkGhostCollisions(pacmanBounds);
+                
+                if (ghostCollision) {
+                    this.lives--;
+                    if (this.lives <= 0) {
+                        this.gameState = GameState.GAME_OVER;
                     } else {
-                        this.lives--;
-                        if (this.lives <= 0) {
-                            this.gameState = GameState.GAME_OVER;
-                        } else {
-                            this.gameState = GameState.DYING;
-                            this.stateTimer = this.DEATH_ANIMATION_DURATION;
-                        }
+                        this.gameState = GameState.DYING;
+                        this.stateTimer = this.DEATH_ANIMATION_DURATION;
                     }
                 }
 
-                // Vérifier si le niveau est terminé
                 if (this.maze.getRemainingDots() === 0) {
                     this.gameState = GameState.LEVEL_COMPLETE;
                     this.stateTimer = this.START_DELAY;
@@ -123,6 +126,24 @@ export class Game {
         }
     }
 
+    private checkGhostCollisions(pacmanBounds: any): boolean {
+        const ghosts = [this.blinky, this.pinky];
+        
+        for (const ghost of ghosts) {
+            const ghostBounds = ghost.getBounds();
+            if (this.checkCollision(pacmanBounds, ghostBounds)) {
+                if (ghost.isVulnerable()) {
+                    ghost.reset();
+                    this.pacman.addScore(200);
+                    return false;
+                }
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
     private render(): void {
         // Effacement du canvas
         this.ctx.fillStyle = 'black';
@@ -138,6 +159,7 @@ export class Game {
         
         if (this.gameState === GameState.PLAYING || this.gameState === GameState.DYING) {
             this.blinky.render(this.ctx);
+            this.pinky.render(this.ctx);
         }
 
         // Interface utilisateur
