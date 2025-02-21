@@ -183,4 +183,15 @@ export abstract class Ghost extends Entity {
     protected calculateDistance(pos1: { x: number; y: number }, pos2: { x: number; y: number }): number {
         return Math.sqrt(Math.pow(pos2.x - pos1.x, 2) + Math.pow(pos2.y - pos1.y, 2));
     }
+
+    public isVulnerable(): boolean {
+        return this.state === GhostState.FRIGHTENED;
+    }
+
+    public reset(): void {
+        this.x = this.homePosition.x;
+        this.y = this.homePosition.y;
+        this.state = GhostState.SCATTER;
+        this.direction = Direction.NONE;
+    }
 } 

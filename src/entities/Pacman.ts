@@ -97,4 +97,8 @@ export class Pacman extends Entity {
     public getScore(): number {
         return this.score;
     }
+
+    public addScore(points: number): void {
+        this.score += points;
+    }
 } 
