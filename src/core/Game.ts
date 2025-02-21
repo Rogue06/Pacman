@@ -4,6 +4,7 @@ import { InputManager } from '../managers/InputManager';
 import { Blinky } from '../entities/ghosts/Blinky';
 import { Pinky } from '../entities/ghosts/Pinky';
 import { Inky } from '../entities/ghosts/Inky';
+import { Clyde } from '../entities/ghosts/Clyde';
 
 export enum GameState {
     STARTING,   // Animation de début
@@ -25,6 +26,7 @@ export class Game {
     private blinky!: Blinky;
     private pinky!: Pinky;
     private inky!: Inky;
+    private clyde!: Clyde;
     private inputManager!: InputManager;
 
     private lives: number = 3;
@@ -80,6 +82,12 @@ export class Game {
             this.pacman,
             this.blinky
         );
+        this.clyde = new Clyde(
+            14 * this.maze.getTileSize(),
+            20 * this.maze.getTileSize(),
+            this.maze,
+            this.pacman
+        );
         
         this.gameState = GameState.STARTING;
         this.stateTimer = this.START_DELAY;
@@ -100,6 +108,7 @@ export class Game {
                 this.blinky.update(deltaTime);
                 this.pinky.update(deltaTime);
                 this.inky.update(deltaTime);
+                this.clyde.update(deltaTime);
 
                 // Vérifier les collisions avec les fantômes
                 const pacmanBounds = this.pacman.getBounds();
@@ -137,7 +146,7 @@ export class Game {
     }
 
     private checkGhostCollisions(pacmanBounds: any): boolean {
-        const ghosts = [this.blinky, this.pinky, this.inky];
+        const ghosts = [this.blinky, this.pinky, this.inky, this.clyde];
         
         for (const ghost of ghosts) {
             const ghostBounds = ghost.getBounds();
@@ -171,6 +180,7 @@ export class Game {
             this.blinky.render(this.ctx);
             this.pinky.render(this.ctx);
             this.inky.render(this.ctx);
+            this.clyde.render(this.ctx);
         }
 
         // Interface utilisateur
