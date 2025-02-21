@@ -1,6 +1,7 @@
 import { Maze } from '../entities/Maze';
 import { Pacman } from '../entities/Pacman';
 import { InputManager } from '../managers/InputManager';
+import { Blinky } from '../entities/ghosts/Blinky';
 
 export class Game {
     private canvas: HTMLCanvasElement;
@@ -11,6 +12,7 @@ export class Game {
 
     private maze!: Maze;
     private pacman!: Pacman;
+    private blinky!: Blinky;
     private inputManager!: InputManager;
 
     constructor() {
@@ -36,12 +38,28 @@ export class Game {
             23 * this.maze.getTileSize(), // Position de départ Y
             this.maze
         );
+        this.blinky = new Blinky(
+            14 * this.maze.getTileSize(), // Position de départ X
+            11 * this.maze.getTileSize(), // Position de départ Y
+            this.maze,
+            this.pacman
+        );
         
         this.gameLoop(0);
     }
 
     private update(deltaTime: number): void {
         this.pacman.update(deltaTime);
+        this.blinky.update(deltaTime);
+
+        // Vérifier la collision avec Blinky
+        const pacmanBounds = this.pacman.getBounds();
+        const blinkyBounds = this.blinky.getBounds();
+
+        if (this.checkCollision(pacmanBounds, blinkyBounds)) {
+            // TODO: Gérer la collision (perte de vie ou manger le fantôme)
+            console.log('Collision avec Blinky !');
+        }
     }
 
     private render(): void {
@@ -55,10 +73,20 @@ export class Game {
         // Rendu de Pac-Man
         this.pacman.render(this.ctx);
 
+        // Rendu de Blinky
+        this.blinky.render(this.ctx);
+
         // Affichage du score
         this.ctx.fillStyle = 'white';
         this.ctx.font = '20px Arial';
         this.ctx.fillText(`Score: ${this.pacman.getScore()}`, 10, 30);
+    }
+
+    private checkCollision(bounds1: any, bounds2: any): boolean {
+        return bounds1.x < bounds2.x + bounds2.width &&
+               bounds1.x + bounds1.width > bounds2.x &&
+               bounds1.y < bounds2.y + bounds2.height &&
+               bounds1.y + bounds1.height > bounds2.y;
     }
 
     private gameLoop(currentTime: number): void {
