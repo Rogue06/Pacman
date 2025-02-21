@@ -1,6 +1,7 @@
 import { Maze } from '../entities/Maze';
 import { Pacman } from '../entities/Pacman';
 import { InputManager } from '../managers/InputManager';
+import { SoundManager, SoundEffect } from '../managers/SoundManager';
 import { Blinky } from '../entities/ghosts/Blinky';
 import { Pinky } from '../entities/ghosts/Pinky';
 import { Inky } from '../entities/ghosts/Inky';
@@ -28,6 +29,7 @@ export class Game {
     private inky!: Inky;
     private clyde!: Clyde;
     private inputManager!: InputManager;
+    private soundManager!: SoundManager;
 
     private lives: number = 3;
     private gameState: GameState = GameState.STARTING;
@@ -47,10 +49,27 @@ export class Game {
         this.canvas.style.top = '50%';
         this.canvas.style.transform = 'translate(-50%, -50%)';
         document.body.style.backgroundColor = 'black';
+
+        // Ajouter les contrôles de son
+        this.setupSoundControls();
+    }
+
+    private setupSoundControls(): void {
+        // Touche 'M' pour couper/activer la musique
+        document.addEventListener('keydown', (event) => {
+            if (event.code === 'KeyM') {
+                this.soundManager.toggleMusic();
+            }
+            // Touche 'S' pour couper/activer les effets sonores
+            else if (event.code === 'KeyS') {
+                this.soundManager.toggleSound();
+            }
+        });
     }
 
     public init(): void {
         this.inputManager = InputManager.getInstance();
+        this.soundManager = SoundManager.getInstance();
         this.maze = new Maze();
         this.resetLevel();
         this.gameLoop(0);
@@ -91,6 +110,9 @@ export class Game {
         
         this.gameState = GameState.STARTING;
         this.stateTimer = this.START_DELAY;
+        
+        // Jouer le son de début de partie
+        this.soundManager.playSound(SoundEffect.GAME_START);
     }
 
     private update(deltaTime: number): void {
@@ -100,6 +122,8 @@ export class Game {
             case GameState.STARTING:
                 if (this.stateTimer <= 0) {
                     this.gameState = GameState.PLAYING;
+                    // Démarrer la sirène quand le jeu commence
+                    this.soundManager.startSiren();
                 }
                 break;
 
@@ -116,6 +140,10 @@ export class Game {
                 
                 if (ghostCollision) {
                     this.lives--;
+                    // Arrêter la sirène et jouer le son de mort
+                    this.soundManager.stopSiren();
+                    this.soundManager.playSound(SoundEffect.DEATH);
+                    
                     if (this.lives <= 0) {
                         this.gameState = GameState.GAME_OVER;
                     } else {
@@ -127,6 +155,8 @@ export class Game {
                 if (this.maze.getRemainingDots() === 0) {
                     this.gameState = GameState.LEVEL_COMPLETE;
                     this.stateTimer = this.START_DELAY;
+                    // Arrêter la sirène à la fin du niveau
+                    this.soundManager.stopSiren();
                 }
                 break;
 
@@ -138,7 +168,7 @@ export class Game {
 
             case GameState.LEVEL_COMPLETE:
                 if (this.stateTimer <= 0) {
-                    this.maze = new Maze(); // Réinitialiser le labyrinthe
+                    this.maze = new Maze();
                     this.resetLevel();
                 }
                 break;
@@ -222,6 +252,13 @@ export class Game {
             this.ctx.fillText('GAME OVER', this.canvas.width / 2, this.canvas.height / 2);
             this.ctx.textAlign = 'left';
         }
+
+        // Indicateurs de son
+        this.ctx.font = '16px Arial';
+        this.ctx.fillStyle = this.soundManager.isMusicEnabled() ? 'white' : 'red';
+        this.ctx.fillText('M: Musique', this.canvas.width - 100, 20);
+        this.ctx.fillStyle = this.soundManager.isSoundEnabled() ? 'white' : 'red';
+        this.ctx.fillText('S: Sons', this.canvas.width - 100, 40);
     }
 
     private checkCollision(bounds1: any, bounds2: any): boolean {
