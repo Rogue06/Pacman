@@ -124,12 +124,17 @@ export class Pacman extends Entity {
     }
 
     private canMoveToPosition(x: number, y: number): boolean {
-        // Vérifier uniquement le centre de Pac-Man pour une meilleure précision
-        const centerX = x + this.width / 2;
-        const centerY = y + this.height / 2;
-        
-        // Vérifier si le centre touche un mur
-        return !this.maze.isWall(centerX, centerY);
+        const offset = 4; // Utiliser un offset plus petit pour une meilleure maniabilité
+
+        const points = [
+            { x: x + this.width / 2, y: y + this.height / 2 }, // Centre
+            { x: x + offset, y: y + offset }, // Coin supérieur gauche
+            { x: x + this.width - offset, y: y + offset }, // Coin supérieur droit
+            { x: x + offset, y: y + this.height - offset }, // Coin inférieur gauche
+            { x: x + this.width - offset, y: y + this.height - offset } // Coin inférieur droit
+        ];
+
+        return !points.some(point => this.maze.isWall(point.x, point.y));
     }
 
     private handleTunnel(): void {
@@ -144,6 +149,7 @@ export class Pacman extends Entity {
     private getNextPosition(dir: Direction): { x: number; y: number } {
         let nextX = this.x;
         let nextY = this.y;
+        const tileSize = this.maze.getTileSize();
 
         // Calculer la prochaine position
         switch (dir) {
@@ -171,6 +177,13 @@ export class Pacman extends Entity {
         } else if (nextX > this.maze.getTileSize() * 27) {
             nextX = -this.width;
         }
+
+        // Alignement sur la grille uniquement si on est proche du centre d'une tuile
+        const gridX = Math.round(nextX / tileSize) * tileSize;
+        const gridY = Math.round(nextY / tileSize) * tileSize;
+        
+        if (Math.abs(nextX - gridX) < this.speed) nextX = gridX;
+        if (Math.abs(nextY - gridY) < this.speed) nextY = gridY;
 
         return { x: nextX, y: nextY };
     }

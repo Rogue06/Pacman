@@ -7,7 +7,8 @@ export enum GhostState {
     CHASE = 'CHASE',       // Le fantôme poursuit Pac-Man
     FRIGHTENED = 'FRIGHTENED', // Le fantôme fuit Pac-Man (mode bleu)
     EATEN = 'EATEN',       // Le fantôme retourne à la maison
-    BLINKING = 'BLINKING'  // État clignotant avant la fin du mode vulnérable
+    BLINKING = 'BLINKING',  // État clignotant avant la fin du mode vulnérable
+    RETURNING = 'RETURNING' // État de retour à la maison
 }
 
 export enum GhostType {
@@ -70,8 +71,51 @@ export abstract class Ghost extends Entity {
     }
 
     public update(deltaTime: number): void {
-        // Mise à jour de la vitesse
-        this.updateSpeed();
+        // Mettre à jour le mode effrayé si nécessaire
+        if (this.state === GhostState.FRIGHTENED || this.state === GhostState.BLINKING) {
+            this.frightenedTimer -= deltaTime;
+            
+            if (this.state === GhostState.FRIGHTENED && 
+                this.frightenedTimer <= this.BLINKING_DURATION) {
+                this.state = GhostState.BLINKING;
+                this.blinkingStart = Date.now();
+            }
+            
+            if (this.frightenedTimer <= 0) {
+                this.state = GhostState.CHASE;
+                this.speed = this.normalSpeed;
+            }
+        }
+
+        // Si le fantôme est au centre d'une tuile, il peut changer de direction
+        if (this.isAtGridCenter()) {
+            const possibleDirections = this.getPossibleDirections();
+            if (possibleDirections.length > 0) {
+                if (this.state === GhostState.FRIGHTENED) {
+                    // En mode effrayé, choisir une direction aléatoire
+                    const randomIndex = Math.floor(Math.random() * possibleDirections.length);
+                    this.direction = possibleDirections[randomIndex];
+                } else {
+                    // En mode normal, utiliser l'algorithme de poursuite
+                    this.direction = this.getNextDirection(possibleDirections);
+                }
+            }
+        }
+
+        // Calculer la prochaine position
+        const nextPos = this.getNextPosition(this.direction);
+
+        // Vérifier si le mouvement est possible
+        if (this.canMoveToPosition(nextPos.x, nextPos.y)) {
+            this.x = nextPos.x;
+            this.y = nextPos.y;
+        } else {
+            // Si le mouvement n'est pas possible, essayer de trouver une nouvelle direction
+            const possibleDirections = this.getPossibleDirections();
+            if (possibleDirections.length > 0) {
+                this.direction = possibleDirections[0];
+            }
+        }
 
         // Mise à jour des timers
         if (this.exitTimer > 0) {
@@ -95,55 +139,8 @@ export abstract class Ghost extends Entity {
             }
         }
 
-        // Mise à jour du timer en mode effrayé
-        if (this.state === GhostState.FRIGHTENED || this.state === GhostState.BLINKING) {
-            this.frightenedTimer -= deltaTime;
-            
-            if (this.state === GhostState.FRIGHTENED && 
-                this.frightenedTimer <= this.BLINKING_DURATION) {
-                this.state = GhostState.BLINKING;
-                this.blinkingStart = Date.now();
-            }
-            
-            if (this.frightenedTimer <= 0) {
-                this.state = GhostState.CHASE;
-                this.speed = this.normalSpeed;
-            }
-        }
-
-        // Gestion du mouvement
-        const tileSize = this.maze.getTileSize();
-        const currentTileX = Math.floor(this.x / tileSize);
-        const currentTileY = Math.floor(this.y / tileSize);
-
-        // Si on est dans la maison des fantômes, monter jusqu'à la sortie
-        if (this.maze.isGhostHouse(currentTileX, currentTileY)) {
-            this.y -= this.speed;
-            return;
-        }
-
-        // Alignement sur la grille et changement de direction
-        const alignedX = currentTileX * tileSize;
-        const alignedY = currentTileY * tileSize;
-
-        if (Math.abs(this.x - alignedX) < this.speed && Math.abs(this.y - alignedY) < this.speed) {
-            this.x = alignedX;
-            this.y = alignedY;
-
-            const newDirection = this.decideNextDirection();
-            if (newDirection !== Direction.NONE) {
-                this.direction = newDirection;
-            }
-        }
-
-        // Déplacement
-        if (this.direction !== Direction.NONE) {
-            const nextPos = this.getNextPosition(this.direction);
-            if (!this.maze.isWall(nextPos.x + this.width / 2, nextPos.y + this.height / 2, true)) {
-                this.x = nextPos.x;
-                this.y = nextPos.y;
-            }
-        }
+        // Mise à jour de la vitesse
+        this.updateSpeed();
 
         // Gestion du tunnel
         if (this.x < -this.width) {
@@ -295,10 +292,27 @@ export abstract class Ghost extends Entity {
         }
     }
 
+    private canMoveToPosition(x: number, y: number): boolean {
+        const tileSize = this.maze.getTileSize();
+        const offset = 4; // Utiliser un offset plus petit pour une meilleure maniabilité
+
+        const points = [
+            { x: x + this.width / 2, y: y + this.height / 2 }, // Centre
+            { x: x + offset, y: y + offset }, // Coin supérieur gauche
+            { x: x + this.width - offset, y: y + offset }, // Coin supérieur droit
+            { x: x + offset, y: y + this.height - offset }, // Coin inférieur gauche
+            { x: x + this.width - offset, y: y + this.height - offset } // Coin inférieur droit
+        ];
+
+        return !points.some(point => this.maze.isWall(point.x, point.y, true));
+    }
+
     protected getNextPosition(dir: Direction): { x: number; y: number } {
         let nextX = this.x;
         let nextY = this.y;
+        const tileSize = this.maze.getTileSize();
 
+        // Calculer la prochaine position
         switch (dir) {
             case Direction.UP:
                 nextY -= this.speed;
@@ -321,7 +335,21 @@ export abstract class Ghost extends Entity {
             nextX = -this.width;
         }
 
+        // Alignement sur la grille uniquement si on est proche du centre d'une tuile
+        const gridX = Math.round(nextX / tileSize) * tileSize;
+        const gridY = Math.round(nextY / tileSize) * tileSize;
+        
+        if (Math.abs(nextX - gridX) < this.speed) nextX = gridX;
+        if (Math.abs(nextY - gridY) < this.speed) nextY = gridY;
+
         return { x: nextX, y: nextY };
+    }
+
+    private isAtGridCenter(): boolean {
+        const tileSize = this.maze.getTileSize();
+        const centerX = Math.round(this.x / tileSize) * tileSize;
+        const centerY = Math.round(this.y / tileSize) * tileSize;
+        return Math.abs(this.x - centerX) < 1 && Math.abs(this.y - centerY) < 1;
     }
 
     protected updateSpeed(): void {
@@ -345,5 +373,157 @@ export abstract class Ghost extends Entity {
         this.speedMultiplier = multiplier;
         this.normalSpeed = this.BASE_SPEED * multiplier;
         this.speed = this.normalSpeed;
+    }
+
+    private getPossibleDirections(): Direction[] {
+        const possibleDirections: Direction[] = [];
+        const tileSize = this.maze.getTileSize();
+
+        // Vérifier chaque direction
+        const directions = [Direction.UP, Direction.DOWN, Direction.LEFT, Direction.RIGHT];
+        for (const dir of directions) {
+            const nextPos = this.getNextPosition(dir);
+            if (this.canMoveToPosition(nextPos.x, nextPos.y)) {
+                possibleDirections.push(dir);
+            }
+        }
+
+        // Retirer la direction opposée sauf si c'est la seule option
+        if (possibleDirections.length > 1) {
+            const oppositeIndex = possibleDirections.findIndex(dir => 
+                (dir === Direction.UP && this.direction === Direction.DOWN) ||
+                (dir === Direction.DOWN && this.direction === Direction.UP) ||
+                (dir === Direction.LEFT && this.direction === Direction.RIGHT) ||
+                (dir === Direction.RIGHT && this.direction === Direction.LEFT)
+            );
+            if (oppositeIndex !== -1) {
+                possibleDirections.splice(oppositeIndex, 1);
+            }
+        }
+
+        return possibleDirections;
+    }
+
+    private getNextDirection(possibleDirections: Direction[]): Direction {
+        // Si nous sommes dans la maison des fantômes, toujours monter
+        const currentTileX = Math.floor(this.x / this.maze.getTileSize());
+        const currentTileY = Math.floor(this.y / this.maze.getTileSize());
+        if (this.maze.isGhostHouse(currentTileX, currentTileY)) {
+            return Direction.UP;
+        }
+
+        // Calculer la direction qui nous rapproche le plus de la cible
+        let bestDirection = this.direction;
+        let shortestDistance = Infinity;
+
+        const targetPos = this.getTargetPosition();
+
+        for (const dir of possibleDirections) {
+            const nextPos = this.getNextPosition(dir);
+            const distance = Math.sqrt(
+                Math.pow(nextPos.x - targetPos.x, 2) + 
+                Math.pow(nextPos.y - targetPos.y, 2)
+            );
+
+            if (distance < shortestDistance) {
+                shortestDistance = distance;
+                bestDirection = dir;
+            }
+        }
+
+        return bestDirection;
+    }
+
+    private getTargetPosition(): { x: number; y: number } {
+        // Si le fantôme est effrayé, il n'a pas de cible spécifique
+        if (this.state === GhostState.FRIGHTENED || this.state === GhostState.BLINKING) {
+            return { 
+                x: Math.random() * this.maze.getTileSize() * 28,
+                y: Math.random() * this.maze.getTileSize() * 31
+            };
+        }
+
+        // Si le fantôme est en mode retour à la maison
+        if (this.state === GhostState.RETURNING) {
+            return {
+                x: this.maze.getTileSize() * 14,
+                y: this.maze.getTileSize() * 14
+            };
+        }
+
+        // En mode normal, la cible dépend du type de fantôme
+        switch (this.ghostType) {
+            case GhostType.BLINKY:
+                // Blinky cible directement Pac-Man
+                return { 
+                    x: this.pacman.getPosition().x, 
+                    y: this.pacman.getPosition().y 
+                };
+            
+            case GhostType.PINKY:
+                // Pinky cible 4 cases devant Pac-Man
+                const offset = this.maze.getTileSize() * 4;
+                const pacmanPos = this.pacman.getPosition();
+                let targetX = pacmanPos.x;
+                let targetY = pacmanPos.y;
+                
+                switch (this.pacman.getDirection()) {
+                    case Direction.UP:
+                        targetY -= offset;
+                        break;
+                    case Direction.DOWN:
+                        targetY += offset;
+                        break;
+                    case Direction.LEFT:
+                        targetX -= offset;
+                        break;
+                    case Direction.RIGHT:
+                        targetX += offset;
+                        break;
+                }
+                return { x: targetX, y: targetY };
+            
+            case GhostType.INKY:
+                // Inky cible une position basée sur la position de Blinky et Pac-Man
+                const blinkyPos = this.getBlinkyPosition();
+                const pacmanPosition = this.pacman.getPosition();
+                return {
+                    x: pacmanPosition.x + (pacmanPosition.x - blinkyPos.x),
+                    y: pacmanPosition.y + (pacmanPosition.y - blinkyPos.y)
+                };
+            
+            case GhostType.CLYDE:
+                // Clyde alterne entre cibler Pac-Man et un coin du labyrinthe
+                const pacmanCurrentPos = this.pacman.getPosition();
+                const distanceToPacman = Math.sqrt(
+                    Math.pow(this.getPosition().x - pacmanCurrentPos.x, 2) + 
+                    Math.pow(this.getPosition().y - pacmanCurrentPos.y, 2)
+                );
+                
+                if (distanceToPacman > this.maze.getTileSize() * 8) {
+                    return { 
+                        x: pacmanCurrentPos.x, 
+                        y: pacmanCurrentPos.y 
+                    };
+                } else {
+                    return {
+                        x: 0,
+                        y: this.maze.getTileSize() * 31
+                    };
+                }
+            
+            default:
+                const defaultTarget = this.pacman.getPosition();
+                return { 
+                    x: defaultTarget.x, 
+                    y: defaultTarget.y 
+                };
+        }
+    }
+
+    private getBlinkyPosition(): { x: number; y: number } {
+        // Cette méthode devrait être implémentée pour obtenir la position de Blinky
+        // Pour l'instant, on retourne une position par défaut
+        return { x: 0, y: 0 };
     }
 } 
