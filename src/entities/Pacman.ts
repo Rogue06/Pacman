@@ -41,12 +41,25 @@ export class Pacman extends Entity {
             this.mouthSpeed = -this.mouthSpeed;
         }
 
+        // Obtenir la position actuelle en termes de tuiles
+        const currentTileX = Math.floor(this.x / this.TILE_SIZE);
+        const currentTileY = Math.floor(this.y / this.TILE_SIZE);
+
+        // Vérifier les chemins disponibles
+        const canMoveVertical = !this.maze.isWall(currentTileX * this.TILE_SIZE, (currentTileY - 1) * this.TILE_SIZE) ||
+                               !this.maze.isWall(currentTileX * this.TILE_SIZE, (currentTileY + 1) * this.TILE_SIZE);
+        const canMoveHorizontal = !this.maze.isWall((currentTileX - 1) * this.TILE_SIZE, currentTileY * this.TILE_SIZE) ||
+                                 !this.maze.isWall((currentTileX + 1) * this.TILE_SIZE, currentTileY * this.TILE_SIZE);
+
         // Mise à jour de la direction basée sur l'input
         const inputDirection = this.inputManager.getNextDirection();
         
-        // Si une nouvelle direction est demandée, vérifier si le changement est possible
         if (inputDirection !== Direction.NONE && inputDirection !== this.direction) {
-            if (this.canChangeDirection(inputDirection)) {
+            // Vérifier si la nouvelle direction est autorisée selon l'axe disponible
+            const isVerticalMove = inputDirection === Direction.UP || inputDirection === Direction.DOWN;
+            const isHorizontalMove = inputDirection === Direction.LEFT || inputDirection === Direction.RIGHT;
+
+            if ((isVerticalMove && canMoveVertical) || (isHorizontalMove && canMoveHorizontal)) {
                 this.direction = inputDirection;
             }
         }
@@ -77,79 +90,6 @@ export class Pacman extends Entity {
             this.soundManager.playSound(SoundEffect.POWER_PELLET);
             this.game.activatePowerMode();
         }
-    }
-
-    private canChangeDirection(newDirection: Direction): boolean {
-        const tileX = Math.floor(this.x / this.TILE_SIZE);
-        const tileY = Math.floor(this.y / this.TILE_SIZE);
-        
-        // Vérifier si on est suffisamment aligné avec la grille
-        const alignedX = tileX * this.TILE_SIZE;
-        const alignedY = tileY * this.TILE_SIZE;
-        const isAlignedX = Math.abs(this.x - alignedX) < 2;
-        const isAlignedY = Math.abs(this.y - alignedY) < 2;
-
-        // Pour les changements horizontaux vers verticaux
-        if ((this.direction === Direction.LEFT || this.direction === Direction.RIGHT) &&
-            (newDirection === Direction.UP || newDirection === Direction.DOWN)) {
-            // Doit être aligné horizontalement et avoir un chemin vertical
-            return isAlignedX && !this.maze.isWall(tileX * this.TILE_SIZE, (tileY + (newDirection === Direction.DOWN ? 1 : -1)) * this.TILE_SIZE);
-        }
-        
-        // Pour les changements verticaux vers horizontaux
-        if ((this.direction === Direction.UP || this.direction === Direction.DOWN) &&
-            (newDirection === Direction.LEFT || newDirection === Direction.RIGHT)) {
-            // Doit être aligné verticalement et avoir un chemin horizontal
-            return isAlignedY && !this.maze.isWall((tileX + (newDirection === Direction.RIGHT ? 1 : -1)) * this.TILE_SIZE, tileY * this.TILE_SIZE);
-        }
-
-        // Pour les inversions de direction
-        return true;
-    }
-
-    private canMoveToPosition(x: number, y: number): boolean {
-        const centerX = x + this.width / 2;
-        const centerY = y + this.height / 2;
-        const tileX = Math.floor(centerX / this.TILE_SIZE);
-        const tileY = Math.floor(centerY / this.TILE_SIZE);
-
-        // Vérifier le point central
-        return !this.maze.isWall(tileX * this.TILE_SIZE, tileY * this.TILE_SIZE);
-    }
-
-    private handleTunnel(): void {
-        // Gestion du passage par le tunnel
-        if (this.x < -this.width) {
-            this.x = this.maze.getTileSize() * 27;
-        } else if (this.x > this.maze.getTileSize() * 27) {
-            this.x = -this.width;
-        }
-    }
-
-    private getNextPosition(dir: Direction): { x: number; y: number } {
-        let nextX = this.x;
-        let nextY = this.y;
-
-        switch (dir) {
-            case Direction.UP:
-                nextY -= this.speed;
-                this.angle = 1.5 * Math.PI;
-                break;
-            case Direction.DOWN:
-                nextY += this.speed;
-                this.angle = 0.5 * Math.PI;
-                break;
-            case Direction.LEFT:
-                nextX -= this.speed;
-                this.angle = Math.PI;
-                break;
-            case Direction.RIGHT:
-                nextX += this.speed;
-                this.angle = 0;
-                break;
-        }
-
-        return { x: nextX, y: nextY };
     }
 
     public render(ctx: CanvasRenderingContext2D): void {
@@ -203,5 +143,49 @@ export class Pacman extends Entity {
         
         return Math.abs(this.x - alignedX) < alignmentTolerance && 
                Math.abs(this.y - alignedY) < alignmentTolerance;
+    }
+
+    private getNextPosition(dir: Direction): { x: number; y: number } {
+        let nextX = this.x;
+        let nextY = this.y;
+
+        switch (dir) {
+            case Direction.UP:
+                nextY -= this.speed;
+                this.angle = 1.5 * Math.PI;
+                break;
+            case Direction.DOWN:
+                nextY += this.speed;
+                this.angle = 0.5 * Math.PI;
+                break;
+            case Direction.LEFT:
+                nextX -= this.speed;
+                this.angle = Math.PI;
+                break;
+            case Direction.RIGHT:
+                nextX += this.speed;
+                this.angle = 0;
+                break;
+        }
+
+        return { x: nextX, y: nextY };
+    }
+
+    private canMoveToPosition(x: number, y: number): boolean {
+        const centerX = x + this.width / 2;
+        const centerY = y + this.height / 2;
+        const tileX = Math.floor(centerX / this.TILE_SIZE);
+        const tileY = Math.floor(centerY / this.TILE_SIZE);
+
+        return !this.maze.isWall(tileX * this.TILE_SIZE, tileY * this.TILE_SIZE);
+    }
+
+    private handleTunnel(): void {
+        // Gestion du passage par le tunnel
+        if (this.x < -this.width) {
+            this.x = this.maze.getTileSize() * 27;
+        } else if (this.x > this.maze.getTileSize() * 27) {
+            this.x = -this.width;
+        }
     }
 } 
