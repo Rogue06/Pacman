@@ -9,6 +9,8 @@ import { Clyde } from '../entities/ghosts/Clyde';
 import { Ghost } from '../entities/Ghost';
 import { Cutscene, CutsceneType } from './Cutscene';
 import { Fruit } from '../entities/Fruit';
+import { DIPMenu } from './DIPMenu';
+import { DIPConfig } from './DIPConfig';
 
 export enum GameState {
     TITLE_SCREEN, // Écran titre
@@ -50,10 +52,12 @@ export class Game {
     private cutsceneIndex: number = 0;
     private fruit: Fruit | null = null;
     private readonly DOTS_FOR_FRUIT: number[] = [70, 170]; // Apparition du fruit à 70 et 170 pac-gommes mangées
-    private readonly POINTS_FOR_EXTRA_LIFE: number = 10000;
+    private POINTS_FOR_EXTRA_LIFE: number = 10000;
     private lastExtraLifeScore: number = 0;
     private readonly KILL_SCREEN_LEVEL: number = 256;
     private isKillScreen: boolean = false;
+    private dipMenu: DIPMenu;
+    private dipConfig: DIPConfig;
 
     constructor() {
         this.canvas = document.createElement('canvas');
@@ -70,6 +74,28 @@ export class Game {
 
         // Ajouter les contrôles de son et de jeu
         this.setupControls();
+        this.dipMenu = new DIPMenu(this.canvas);
+        this.dipConfig = DIPConfig.getInstance();
+
+        // Ajouter la touche 'Tab' pour ouvrir/fermer le menu DIP
+        document.addEventListener('keydown', (event) => {
+            if (event.code === 'Tab') {
+                event.preventDefault(); // Empêcher le focus du navigateur
+                if (this.dipMenu.isMenuVisible()) {
+                    this.dipMenu.hide();
+                    if (this.gameState === GameState.PAUSED) {
+                        this.gameState = GameState.PLAYING;
+                        this.soundManager.startSiren();
+                    }
+                } else {
+                    this.dipMenu.show();
+                    if (this.gameState === GameState.PLAYING) {
+                        this.gameState = GameState.PAUSED;
+                        this.soundManager.stopSiren();
+                    }
+                }
+            }
+        });
     }
 
     private setupControls(): void {
@@ -176,10 +202,19 @@ export class Game {
         // Créer un nouveau fruit pour le niveau
         this.fruit = new Fruit(this.maze, this.currentLevel);
         
-        // Ajuster la vitesse des fantômes selon le niveau
-        const speedMultiplier = Math.min(1 + (this.currentLevel - 1) * 0.1, 1.5); // Max +50% de vitesse
+        // Appliquer les paramètres DIP
+        const settings = this.dipConfig.getSettings();
+        this.lives = settings.lives;
+        this.POINTS_FOR_EXTRA_LIFE = settings.bonusLife;
+
+        // Ajuster les vitesses
+        const difficultyMultiplier = this.dipConfig.getDifficultyMultiplier();
+        const ghostSpeedMultiplier = settings.ghostSpeed * difficultyMultiplier;
         const ghosts = [this.blinky, this.pinky, this.inky, this.clyde];
-        ghosts.forEach(ghost => ghost.setSpeedMultiplier(speedMultiplier));
+        ghosts.forEach(ghost => ghost.setSpeedMultiplier(ghostSpeedMultiplier));
+
+        // Ajuster la vitesse de Pac-Man
+        this.pacman.setSpeedMultiplier(settings.pacmanSpeed);
 
         // Vérifier si c'est le niveau du Kill Screen
         if (this.currentLevel === this.KILL_SCREEN_LEVEL) {
@@ -210,11 +245,29 @@ export class Game {
     }
 
     private startCutscene(): void {
-        const cutsceneType = ((this.cutsceneIndex % 3) + 1) as CutsceneType;
+        // Choisir une cutscene en fonction du niveau
+        let cutsceneType: CutsceneType;
+        switch (this.currentLevel % 5) {
+            case 1:
+                cutsceneType = CutsceneType.BLINKY_CHASE;
+                break;
+            case 2:
+                cutsceneType = CutsceneType.NAIL_GHOST;
+                break;
+            case 3:
+                cutsceneType = CutsceneType.GIANT_PACMAN;
+                break;
+            case 4:
+                cutsceneType = CutsceneType.COOKIE_BREAK;
+                break;
+            default:
+                cutsceneType = CutsceneType.GHOST_TRAP;
+        }
+        
         this.currentCutscene = new Cutscene(this.canvas, cutsceneType);
         this.cutsceneIndex++;
         this.gameState = GameState.CUTSCENE;
-        this.stateTimer = 5000; // 5 secondes de cutscene
+        this.stateTimer = 5000;
     }
 
     private update(deltaTime: number): void {
@@ -413,6 +466,9 @@ export class Game {
             // Ajouter des effets visuels de corruption
             this.renderKillScreenEffects();
         }
+
+        // Rendre le menu DIP par-dessus tout si visible
+        this.dipMenu.render();
     }
 
     private renderTitleScreen(): void {

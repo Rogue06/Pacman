@@ -17,6 +17,8 @@ export class Pacman extends Entity {
     private readonly DOT_SOUND_DELAY: number = 150; // Délai minimum entre deux sons de pac-gomme
     private nextDirection: Direction = Direction.NONE;
     private readonly TILE_SIZE: number = 16;
+    private speedMultiplier: number = 1;
+    private baseSpeed: number = 1.5;
 
     constructor(x: number, y: number, maze: Maze, game: Game) {
         super(x, y, 16, 16, 1.5); // Vitesse réduite à 1.5 pour un meilleur contrôle
@@ -24,6 +26,12 @@ export class Pacman extends Entity {
         this.game = game;
         this.inputManager = InputManager.getInstance();
         this.soundManager = SoundManager.getInstance();
+        this.speed = this.baseSpeed;
+    }
+
+    public setSpeedMultiplier(multiplier: number): void {
+        this.speedMultiplier = multiplier;
+        this.speed = this.baseSpeed * multiplier;
     }
 
     public update(deltaTime: number): void {
