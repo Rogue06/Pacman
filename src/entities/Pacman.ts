@@ -15,9 +15,11 @@ export class Pacman extends Entity {
     private score: number = 0;
     private lastDotTime: number = 0;
     private readonly DOT_SOUND_DELAY: number = 150; // Délai minimum entre deux sons de pac-gomme
+    private nextDirection: Direction = Direction.NONE;
+    private readonly TILE_SIZE: number = 16;
 
     constructor(x: number, y: number, maze: Maze, game: Game) {
-        super(x, y, 16, 16, 2); // Taille 16x16 pixels, vitesse 2
+        super(x, y, 16, 16, 1.5); // Vitesse réduite à 1.5 pour un meilleur contrôle
         this.maze = maze;
         this.game = game;
         this.inputManager = InputManager.getInstance();
@@ -32,37 +34,102 @@ export class Pacman extends Entity {
         }
 
         // Mise à jour de la direction basée sur l'input
-        const nextDirection = this.inputManager.getNextDirection();
-        if (nextDirection !== Direction.NONE) {
-            // Vérifier si la nouvelle direction est possible
-            const nextPos = this.getNextPosition(nextDirection);
-            if (!this.maze.isWall(nextPos.x, nextPos.y)) {
-                this.direction = nextDirection;
-                this.inputManager.clearNextDirection();
+        const inputDirection = this.inputManager.getNextDirection();
+        if (inputDirection !== Direction.NONE) {
+            this.nextDirection = inputDirection;
+        }
+
+        // Alignement sur la grille pour les changements de direction
+        const currentTileX = Math.floor(this.x / this.TILE_SIZE);
+        const currentTileY = Math.floor(this.y / this.TILE_SIZE);
+        const alignedX = currentTileX * this.TILE_SIZE;
+        const alignedY = currentTileY * this.TILE_SIZE;
+        const isAlignedX = Math.abs(this.x - alignedX) < this.speed;
+        const isAlignedY = Math.abs(this.y - alignedY) < this.speed;
+
+        // Essayer d'appliquer la nouvelle direction si on est aligné avec la grille
+        if (this.nextDirection !== Direction.NONE) {
+            if (this.canMove(this.nextDirection, currentTileX, currentTileY)) {
+                if ((this.nextDirection === Direction.UP || this.nextDirection === Direction.DOWN) && isAlignedX) {
+                    this.x = alignedX;
+                    this.direction = this.nextDirection;
+                    this.nextDirection = Direction.NONE;
+                    this.inputManager.clearNextDirection();
+                } else if ((this.nextDirection === Direction.LEFT || this.nextDirection === Direction.RIGHT) && isAlignedY) {
+                    this.y = alignedY;
+                    this.direction = this.nextDirection;
+                    this.nextDirection = Direction.NONE;
+                    this.inputManager.clearNextDirection();
+                }
             }
         }
 
-        // Déplacement
-        const nextPos = this.getNextPosition(this.direction);
-        if (!this.maze.isWall(nextPos.x, nextPos.y)) {
-            this.x = nextPos.x;
-            this.y = nextPos.y;
+        // Déplacement dans la direction actuelle
+        if (this.direction !== Direction.NONE) {
+            const nextPos = this.getNextPosition(this.direction);
+            if (this.canMoveToPosition(nextPos.x, nextPos.y)) {
+                this.x = nextPos.x;
+                this.y = nextPos.y;
+            } else {
+                // Alignement avec la grille si on ne peut pas avancer
+                if (this.direction === Direction.UP || this.direction === Direction.DOWN) {
+                    this.x = alignedX;
+                } else {
+                    this.y = alignedY;
+                }
+                this.direction = Direction.NONE;
+            }
         }
 
+        // Gestion du tunnel
+        this.handleTunnel();
+
+        // Collecte des points
         const currentTime = Date.now();
-        // Vérification des collisions avec les pac-gommes
-        if (this.maze.consumeDot(this.x, this.y)) {
+        if (this.maze.consumeDot(this.x + this.width / 2, this.y + this.height / 2)) {
             this.score += 10;
-            // Jouer le son avec un délai minimum pour éviter la surcharge
             if (currentTime - this.lastDotTime > this.DOT_SOUND_DELAY) {
                 this.soundManager.playSound(SoundEffect.WAKAWAKA);
                 this.lastDotTime = currentTime;
             }
         }
-        if (this.maze.consumePowerPellet(this.x, this.y)) {
+        if (this.maze.consumePowerPellet(this.x + this.width / 2, this.y + this.height / 2)) {
             this.score += 50;
             this.soundManager.playSound(SoundEffect.POWER_PELLET);
             this.game.activatePowerMode();
+        }
+    }
+
+    private canMove(direction: Direction, tileX: number, tileY: number): boolean {
+        switch (direction) {
+            case Direction.UP:
+                return !this.maze.isWall(tileX * this.TILE_SIZE, (tileY - 1) * this.TILE_SIZE);
+            case Direction.DOWN:
+                return !this.maze.isWall(tileX * this.TILE_SIZE, (tileY + 1) * this.TILE_SIZE);
+            case Direction.LEFT:
+                return !this.maze.isWall((tileX - 1) * this.TILE_SIZE, tileY * this.TILE_SIZE);
+            case Direction.RIGHT:
+                return !this.maze.isWall((tileX + 1) * this.TILE_SIZE, tileY * this.TILE_SIZE);
+            default:
+                return false;
+        }
+    }
+
+    private canMoveToPosition(x: number, y: number): boolean {
+        // Vérifier uniquement le centre de Pac-Man pour une meilleure précision
+        const centerX = x + this.width / 2;
+        const centerY = y + this.height / 2;
+        
+        // Vérifier si le centre touche un mur
+        return !this.maze.isWall(centerX, centerY);
+    }
+
+    private handleTunnel(): void {
+        // Gestion du passage par le tunnel
+        if (this.x < -this.width) {
+            this.x = this.maze.getTileSize() * 27;
+        } else if (this.x > this.maze.getTileSize() * 27) {
+            this.x = -this.width;
         }
     }
 
@@ -70,6 +137,7 @@ export class Pacman extends Entity {
         let nextX = this.x;
         let nextY = this.y;
 
+        // Calculer la prochaine position
         switch (dir) {
             case Direction.UP:
                 nextY -= this.speed;
@@ -87,6 +155,13 @@ export class Pacman extends Entity {
                 nextX += this.speed;
                 this.angle = 0;
                 break;
+        }
+
+        // Gestion du tunnel
+        if (nextX < -this.width) {
+            nextX = this.maze.getTileSize() * 27;
+        } else if (nextX > this.maze.getTileSize() * 27) {
+            nextX = -this.width;
         }
 
         return { x: nextX, y: nextY };
@@ -119,5 +194,17 @@ export class Pacman extends Entity {
 
     public getDirection(): Direction {
         return this.direction;
+    }
+
+    public getPosition(): { x: number; y: number } {
+        return { x: this.x, y: this.y };
+    }
+
+    public getX(): number {
+        return this.x;
+    }
+
+    public getY(): number {
+        return this.y;
     }
 } 

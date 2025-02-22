@@ -4,6 +4,11 @@ import { Maze } from '../Maze';
 import { Pacman } from '../Pacman';
 
 export class Blinky extends Ghost {
+    private readonly ELROY_SPEED_1: number = 2.5;  // Première vitesse Cruise Elroy
+    private readonly ELROY_SPEED_2: number = 3;    // Deuxième vitesse Cruise Elroy
+    private readonly ELROY_DOTS_1: number = 20;    // Seuil 1 : 20 pac-gommes restantes
+    private readonly ELROY_DOTS_2: number = 10;    // Seuil 2 : 10 pac-gommes restantes
+
     constructor(x: number, y: number, maze: Maze, pacman: Pacman) {
         super(
             GhostType.BLINKY,
@@ -12,33 +17,41 @@ export class Blinky extends Ghost {
             maze,
             pacman,
             '#FF0000', // Rouge
-            { x: maze.getTileSize() * 25, y: 0 } // Coin supérieur droit pour le mode scatter
+            { x: 25 * maze.getTileSize(), y: 0 } // Coin supérieur droit
         );
     }
 
-    protected decideNextDirection(): Direction {
-        const availableDirections = this.getAvailableDirections();
-        
-        // En mode effrayé, choisir une direction aléatoire
-        if (this.state === GhostState.FRIGHTENED) {
-            return availableDirections[Math.floor(Math.random() * availableDirections.length)];
+    public update(deltaTime: number): void {
+        // Mise à jour de la vitesse selon le mode Cruise Elroy
+        if (this.state === GhostState.CHASE || this.state === GhostState.SCATTER) {
+            const remainingDots = this.maze.getRemainingDots();
+            if (remainingDots <= this.ELROY_DOTS_2) {
+                this.speed = this.ELROY_SPEED_2;
+            } else if (remainingDots <= this.ELROY_DOTS_1) {
+                this.speed = this.ELROY_SPEED_1;
+            } else {
+                this.speed = this.normalSpeed;
+            }
         }
 
-        // En mode scatter, viser le coin supérieur droit
-        const target = this.state === GhostState.SCATTER ? 
-            this.scatterTarget : 
-            this.pacman.getPosition();
+        super.update(deltaTime);
+    }
 
+    protected decideNextDirection(): Direction {
+        // En mode poursuite, Blinky vise directement la position de Pac-Man
+        const target = this.state === GhostState.CHASE
+            ? { x: this.pacman.getX(), y: this.pacman.getY() }
+            : this.scatterTarget;
+
+        return this.findBestDirection(target);
+    }
+
+    private findBestDirection(target: { x: number; y: number }): Direction {
+        const availableDirections = this.getAvailableDirections();
         let bestDirection = Direction.NONE;
         let shortestDistance = Infinity;
 
-        // Trouver la direction qui rapproche le plus de la cible
         for (const direction of availableDirections) {
-            // Éviter de faire demi-tour sauf si c'est la seule option
-            if (this.isOppositeDirection(direction, this.direction) && availableDirections.length > 1) {
-                continue;
-            }
-
             const nextPos = this.getNextPosition(direction);
             const distance = this.calculateDistance(nextPos, target);
 

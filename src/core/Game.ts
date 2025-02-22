@@ -7,6 +7,8 @@ import { Pinky } from '../entities/ghosts/Pinky';
 import { Inky } from '../entities/ghosts/Inky';
 import { Clyde } from '../entities/ghosts/Clyde';
 import { Ghost } from '../entities/Ghost';
+import { Cutscene, CutsceneType } from './Cutscene';
+import { Fruit } from '../entities/Fruit';
 
 export enum GameState {
     TITLE_SCREEN, // Écran titre
@@ -15,7 +17,8 @@ export enum GameState {
     PAUSED,       // Jeu en pause
     DYING,        // Pac-Man meurt
     GAME_OVER,    // Partie terminée
-    LEVEL_COMPLETE // Niveau terminé
+    LEVEL_COMPLETE, // Niveau terminé
+    CUTSCENE      // Écran de cutscene
 }
 
 export class Game {
@@ -43,6 +46,14 @@ export class Game {
     private readonly GHOST_SCORE_MULTIPLIER: number = 2; // Le score est doublé pour chaque fantôme consécutif
     private highScore: number = 0;
     private currentLevel: number = 1;
+    private currentCutscene: Cutscene | null = null;
+    private cutsceneIndex: number = 0;
+    private fruit: Fruit | null = null;
+    private readonly DOTS_FOR_FRUIT: number[] = [70, 170]; // Apparition du fruit à 70 et 170 pac-gommes mangées
+    private readonly POINTS_FOR_EXTRA_LIFE: number = 10000;
+    private lastExtraLifeScore: number = 0;
+    private readonly KILL_SCREEN_LEVEL: number = 256;
+    private isKillScreen: boolean = false;
 
     constructor() {
         this.canvas = document.createElement('canvas');
@@ -120,35 +131,37 @@ export class Game {
     }
 
     private resetLevel(): void {
-        // Réinitialiser les positions
+        // Position initiale de Pac-Man (sur le chemin noir en bas)
         this.pacman = new Pacman(
-            14 * this.maze.getTileSize(),
-            23 * this.maze.getTileSize(),
+            13.5 * this.maze.getTileSize(), // Position X centrée
+            28 * this.maze.getTileSize(),   // Position Y sur le chemin noir en bas
             this.maze,
             this
         );
+
+        // Positions des fantômes dans leur maison
         this.blinky = new Blinky(
-            14 * this.maze.getTileSize(),
-            11 * this.maze.getTileSize(),
+            13.5 * this.maze.getTileSize(), // Centre
+            13 * this.maze.getTileSize(),   // Au-dessus de la maison
             this.maze,
             this.pacman
         );
         this.pinky = new Pinky(
-            14 * this.maze.getTileSize(),
-            14 * this.maze.getTileSize(),
+            13.5 * this.maze.getTileSize(), // Centre
+            14 * this.maze.getTileSize(),   // Dans la maison
             this.maze,
             this.pacman
         );
         this.inky = new Inky(
-            14 * this.maze.getTileSize(),
-            17 * this.maze.getTileSize(),
+            12 * this.maze.getTileSize(),   // Gauche
+            14 * this.maze.getTileSize(),   // Dans la maison
             this.maze,
             this.pacman,
             this.blinky
         );
         this.clyde = new Clyde(
-            14 * this.maze.getTileSize(),
-            20 * this.maze.getTileSize(),
+            15 * this.maze.getTileSize(),   // Droite
+            14 * this.maze.getTileSize(),   // Dans la maison
             this.maze,
             this.pacman
         );
@@ -159,11 +172,54 @@ export class Game {
         
         // Jouer le son de début de partie
         this.soundManager.playSound(SoundEffect.GAME_START);
+
+        // Créer un nouveau fruit pour le niveau
+        this.fruit = new Fruit(this.maze, this.currentLevel);
+        
+        // Ajuster la vitesse des fantômes selon le niveau
+        const speedMultiplier = Math.min(1 + (this.currentLevel - 1) * 0.1, 1.5); // Max +50% de vitesse
+        const ghosts = [this.blinky, this.pinky, this.inky, this.clyde];
+        ghosts.forEach(ghost => ghost.setSpeedMultiplier(speedMultiplier));
+
+        // Vérifier si c'est le niveau du Kill Screen
+        if (this.currentLevel === this.KILL_SCREEN_LEVEL) {
+            this.isKillScreen = true;
+            // Corrompre intentionnellement la moitié droite du labyrinthe
+            this.corruptMaze();
+        }
+    }
+
+    private corruptMaze(): void {
+        // Simuler la corruption de la mémoire du niveau 256
+        const corruptedTiles = [
+            '1111111111111111',
+            '2222222222222222',
+            '3333333333333333',
+            '4444444444444444',
+            '5555555555555555'
+        ];
+
+        // Appliquer la corruption à la moitié droite du labyrinthe
+        for (let y = 0; y < this.maze.getHeight(); y++) {
+            const corruptedRow = corruptedTiles[y % corruptedTiles.length];
+            for (let x = 14; x < 28; x++) {
+                const corruptedValue = parseInt(corruptedRow[x - 14]);
+                this.maze.setTile(x, y, corruptedValue);
+            }
+        }
+    }
+
+    private startCutscene(): void {
+        const cutsceneType = ((this.cutsceneIndex % 3) + 1) as CutsceneType;
+        this.currentCutscene = new Cutscene(this.canvas, cutsceneType);
+        this.cutsceneIndex++;
+        this.gameState = GameState.CUTSCENE;
+        this.stateTimer = 5000; // 5 secondes de cutscene
     }
 
     private update(deltaTime: number): void {
         if (this.gameState === GameState.PAUSED) {
-            return; // Ne rien mettre à jour en pause
+            return;
         }
 
         this.stateTimer -= deltaTime;
@@ -212,6 +268,33 @@ export class Game {
                     // Arrêter la sirène à la fin du niveau
                     this.soundManager.stopSiren();
                 }
+
+                // Mise à jour du fruit
+                if (this.fruit) {
+                    this.fruit.update(deltaTime);
+                    
+                    // Vérifier si Pac-Man mange le fruit
+                    if (this.fruit.isActive() && this.checkCollision(pacmanBounds, this.fruit.getBounds())) {
+                        const points = this.fruit.getPoints();
+                        this.pacman.addScore(points);
+                        this.fruit.hide();
+                        this.soundManager.playSound(SoundEffect.FRUIT);
+                    }
+                }
+
+                // Vérifier si on doit faire apparaître le fruit
+                const dotsEaten = this.maze.getTotalDots() - this.maze.getRemainingDots();
+                if (this.fruit && !this.fruit.isActive() && this.DOTS_FOR_FRUIT.includes(dotsEaten)) {
+                    this.fruit.show();
+                }
+
+                // Vérifier si on gagne une vie supplémentaire
+                if (this.pacman.getScore() - this.lastExtraLifeScore >= this.POINTS_FOR_EXTRA_LIFE) {
+                    this.lives++;
+                    this.lastExtraLifeScore = this.pacman.getScore();
+                    this.soundManager.playSound(SoundEffect.EXTEND);
+                }
+
                 break;
 
             case GameState.DYING:
@@ -222,13 +305,28 @@ export class Game {
 
             case GameState.LEVEL_COMPLETE:
                 if (this.stateTimer <= 0) {
-                    this.maze = new Maze();
-                    this.resetLevel();
+                    this.startCutscene();
+                }
+                // Jouer le son de transition
+                if (this.stateTimer === this.START_DELAY) {
+                    this.soundManager.playSound(SoundEffect.INTERMISSION);
                 }
                 break;
 
             case GameState.GAME_OVER:
                 this.saveHighScore();
+                break;
+
+            case GameState.CUTSCENE:
+                if (this.currentCutscene?.update(deltaTime)) {
+                    this.currentLevel++;
+                    this.maze = new Maze();
+                    this.resetLevel();
+                }
+                // Jouer la musique de cutscene
+                if (this.stateTimer === 5000) { // Au début de la cutscene
+                    this.soundManager.playSound(SoundEffect.CUTSCENE);
+                }
                 break;
         }
     }
@@ -288,6 +386,10 @@ export class Game {
                 this.renderPauseOverlay();
                 break;
 
+            case GameState.CUTSCENE:
+                this.currentCutscene?.render();
+                break;
+
             default:
                 // Rendu normal du jeu
                 this.maze.render(this.ctx);
@@ -300,8 +402,16 @@ export class Game {
                     this.inky.render(this.ctx);
                     this.clyde.render(this.ctx);
                 }
+                if (this.fruit && this.fruit.isActive()) {
+                    this.fruit.render(this.ctx);
+                }
                 this.renderUI();
                 break;
+        }
+
+        if (this.isKillScreen) {
+            // Ajouter des effets visuels de corruption
+            this.renderKillScreenEffects();
         }
     }
 
@@ -398,6 +508,28 @@ export class Game {
         this.ctx.fillText('M: Musique', this.canvas.width - 10, this.canvas.height - 40);
         this.ctx.fillStyle = this.soundManager.isSoundEnabled() ? 'white' : 'red';
         this.ctx.fillText('S: Sons', this.canvas.width - 10, this.canvas.height - 20);
+    }
+
+    private renderKillScreenEffects(): void {
+        // Ajouter des artefacts visuels aléatoires
+        for (let i = 0; i < 50; i++) {
+            const x = Math.random() * this.canvas.width;
+            const y = Math.random() * this.canvas.height;
+            const width = Math.random() * 30 + 10;
+            const height = Math.random() * 30 + 10;
+
+            this.ctx.fillStyle = `rgb(${Math.random() * 255},${Math.random() * 255},${Math.random() * 255})`;
+            this.ctx.fillRect(x, y, width, height);
+        }
+
+        // Ajouter du texte corrompu
+        this.ctx.font = '24px Arial';
+        this.ctx.fillStyle = 'red';
+        for (let i = 0; i < 5; i++) {
+            const x = Math.random() * this.canvas.width;
+            const y = Math.random() * this.canvas.height;
+            this.ctx.fillText('ERR0R', x, y);
+        }
     }
 
     private checkCollision(bounds1: any, bounds2: any): boolean {

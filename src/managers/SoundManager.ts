@@ -4,7 +4,11 @@ export enum SoundEffect {
     GHOST_EAT = 'ghost_eat',   // Son quand Pac-Man mange un fantôme
     POWER_PELLET = 'power_pellet', // Son quand Pac-Man mange une super pac-gomme
     GAME_START = 'game_start', // Son au début du jeu
-    SIREN = 'siren'           // Son d'ambiance pendant le jeu
+    SIREN = 'siren',          // Son d'ambiance pendant le jeu
+    CUTSCENE = 'cutscene',    // Musique des cutscenes
+    EXTEND = 'extend',        // Son quand on gagne une vie
+    FRUIT = 'fruit',          // Son quand on mange un fruit
+    INTERMISSION = 'intermission' // Son de transition entre les niveaux
 }
 
 export class SoundManager {
@@ -34,7 +38,11 @@ export class SoundManager {
             [SoundEffect.GHOST_EAT]: 'assets/sounds/ghost_eat.mp3',
             [SoundEffect.POWER_PELLET]: 'assets/sounds/power_pellet.mp3',
             [SoundEffect.GAME_START]: 'assets/sounds/game_start.mp3',
-            [SoundEffect.SIREN]: 'assets/sounds/siren.mp3'
+            [SoundEffect.SIREN]: 'assets/sounds/siren.mp3',
+            [SoundEffect.CUTSCENE]: 'assets/sounds/cutscene.mp3',
+            [SoundEffect.EXTEND]: 'assets/sounds/extend.mp3',
+            [SoundEffect.FRUIT]: 'assets/sounds/fruit.mp3',
+            [SoundEffect.INTERMISSION]: 'assets/sounds/intermission.mp3'
         };
 
         // Précharger tous les sons

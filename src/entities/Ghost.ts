@@ -31,6 +31,20 @@ export abstract class Ghost extends Entity {
     protected readonly FRIGHTENED_SPEED: number = 1; // Vitesse réduite en mode effrayé
     protected normalSpeed: number;
     protected blinkingStart: number = 0;
+    protected exitTimer: number = 0;
+    protected modeTimer: number = 0;
+    protected readonly SCATTER_DURATION: number = 7000;  // 7 secondes en mode scatter
+    protected readonly CHASE_DURATION: number = 20000;   // 20 secondes en mode chase
+    protected readonly EXIT_DELAYS: { [key in GhostType]: number } = {
+        [GhostType.BLINKY]: 0,      // Sort immédiatement
+        [GhostType.PINKY]: 3000,    // Sort après 3 secondes
+        [GhostType.INKY]: 6000,     // Sort après 6 secondes
+        [GhostType.CLYDE]: 9000     // Sort après 9 secondes
+    };
+    protected readonly BASE_SPEED: number = 2;
+    protected readonly TUNNEL_SPEED_MULTIPLIER: number = 0.5;
+    protected readonly EATEN_SPEED: number = 3;
+    protected speedMultiplier: number = 1;
 
     constructor(
         ghostType: GhostType,
@@ -49,36 +63,93 @@ export abstract class Ghost extends Entity {
         this.scatterTarget = scatterTarget;
         this.homePosition = { x, y };
         this.normalSpeed = this.speed;
+        this.exitTimer = this.EXIT_DELAYS[ghostType];
+        this.state = GhostState.SCATTER;
+        this.modeTimer = this.SCATTER_DURATION;
+        this.direction = Direction.UP;
     }
 
     public update(deltaTime: number): void {
+        // Mise à jour de la vitesse
+        this.updateSpeed();
+
+        // Mise à jour des timers
+        if (this.exitTimer > 0) {
+            this.exitTimer -= deltaTime;
+            return; // Attendre avant de sortir
+        }
+
+        // Mise à jour du mode (Scatter/Chase)
+        if (this.state !== GhostState.FRIGHTENED && this.state !== GhostState.EATEN) {
+            this.modeTimer -= deltaTime;
+            if (this.modeTimer <= 0) {
+                if (this.state === GhostState.SCATTER) {
+                    this.state = GhostState.CHASE;
+                    this.modeTimer = this.CHASE_DURATION;
+                } else {
+                    this.state = GhostState.SCATTER;
+                    this.modeTimer = this.SCATTER_DURATION;
+                }
+                // Demi-tour lors du changement de mode
+                this.direction = this.getReverseDirection(this.direction);
+            }
+        }
+
         // Mise à jour du timer en mode effrayé
         if (this.state === GhostState.FRIGHTENED || this.state === GhostState.BLINKING) {
             this.frightenedTimer -= deltaTime;
             
-            // Transition vers le mode clignotant
             if (this.state === GhostState.FRIGHTENED && 
                 this.frightenedTimer <= this.BLINKING_DURATION) {
                 this.state = GhostState.BLINKING;
                 this.blinkingStart = Date.now();
             }
             
-            // Fin du mode vulnérable
             if (this.frightenedTimer <= 0) {
                 this.state = GhostState.CHASE;
                 this.speed = this.normalSpeed;
             }
         }
 
-        const nextDirection = this.decideNextDirection();
-        if (nextDirection !== Direction.NONE) {
-            this.direction = nextDirection;
+        // Gestion du mouvement
+        const tileSize = this.maze.getTileSize();
+        const currentTileX = Math.floor(this.x / tileSize);
+        const currentTileY = Math.floor(this.y / tileSize);
+
+        // Si on est dans la maison des fantômes, monter jusqu'à la sortie
+        if (this.maze.isGhostHouse(currentTileX, currentTileY)) {
+            this.y -= this.speed;
+            return;
         }
 
-        const nextPos = this.getNextPosition(this.direction);
-        if (!this.maze.isWall(nextPos.x, nextPos.y)) {
-            this.x = nextPos.x;
-            this.y = nextPos.y;
+        // Alignement sur la grille et changement de direction
+        const alignedX = currentTileX * tileSize;
+        const alignedY = currentTileY * tileSize;
+
+        if (Math.abs(this.x - alignedX) < this.speed && Math.abs(this.y - alignedY) < this.speed) {
+            this.x = alignedX;
+            this.y = alignedY;
+
+            const newDirection = this.decideNextDirection();
+            if (newDirection !== Direction.NONE) {
+                this.direction = newDirection;
+            }
+        }
+
+        // Déplacement
+        if (this.direction !== Direction.NONE) {
+            const nextPos = this.getNextPosition(this.direction);
+            if (!this.maze.isWall(nextPos.x + this.width / 2, nextPos.y + this.height / 2, true)) {
+                this.x = nextPos.x;
+                this.y = nextPos.y;
+            }
+        }
+
+        // Gestion du tunnel
+        if (this.x < -this.width) {
+            this.x = this.maze.getTileSize() * 27;
+        } else if (this.x > this.maze.getTileSize() * 27) {
+            this.x = -this.width;
         }
     }
 
@@ -171,26 +242,13 @@ export abstract class Ghost extends Entity {
 
     protected abstract decideNextDirection(): Direction;
 
-    protected getNextPosition(dir: Direction): { x: number; y: number } {
-        let nextX = this.x;
-        let nextY = this.y;
-
-        switch (dir) {
-            case Direction.UP:
-                nextY -= this.speed;
-                break;
-            case Direction.DOWN:
-                nextY += this.speed;
-                break;
-            case Direction.LEFT:
-                nextX -= this.speed;
-                break;
-            case Direction.RIGHT:
-                nextX += this.speed;
-                break;
-        }
-
-        return { x: nextX, y: nextY };
+    private canMove(direction: Direction): boolean {
+        const tileSize = this.maze.getTileSize();
+        const nextX = this.x + (direction === Direction.LEFT ? -this.speed : direction === Direction.RIGHT ? this.speed : 0);
+        const nextY = this.y + (direction === Direction.UP ? -this.speed : direction === Direction.DOWN ? this.speed : 0);
+        
+        // Vérifier le centre de la prochaine position
+        return !this.maze.isWall(nextX + this.width / 2, nextY + this.height / 2, true);
     }
 
     private getReverseDirection(dir: Direction): Direction {
@@ -207,9 +265,15 @@ export abstract class Ghost extends Entity {
         const directions: Direction[] = [];
         const possibleDirections = [Direction.UP, Direction.DOWN, Direction.LEFT, Direction.RIGHT];
         
+        // Ne pas permettre de faire demi-tour sauf en mode effrayé
+        const oppositeDirection = this.getReverseDirection(this.direction);
+        
         for (const dir of possibleDirections) {
-            const nextPos = this.getNextPosition(dir);
-            if (!this.maze.isWall(nextPos.x, nextPos.y)) {
+            if (dir === oppositeDirection && this.state !== GhostState.FRIGHTENED) {
+                continue;
+            }
+            
+            if (this.canMove(dir)) {
                 directions.push(dir);
             }
         }
@@ -229,5 +293,57 @@ export abstract class Ghost extends Entity {
             case Direction.RIGHT: return { x: 1, y: 0 };
             default: return { x: 0, y: 0 };
         }
+    }
+
+    protected getNextPosition(dir: Direction): { x: number; y: number } {
+        let nextX = this.x;
+        let nextY = this.y;
+
+        switch (dir) {
+            case Direction.UP:
+                nextY -= this.speed;
+                break;
+            case Direction.DOWN:
+                nextY += this.speed;
+                break;
+            case Direction.LEFT:
+                nextX -= this.speed;
+                break;
+            case Direction.RIGHT:
+                nextX += this.speed;
+                break;
+        }
+
+        // Gestion du tunnel
+        if (nextX < -this.width) {
+            nextX = this.maze.getTileSize() * 27;
+        } else if (nextX > this.maze.getTileSize() * 27) {
+            nextX = -this.width;
+        }
+
+        return { x: nextX, y: nextY };
+    }
+
+    protected updateSpeed(): void {
+        if (this.state === GhostState.FRIGHTENED) {
+            this.speed = this.FRIGHTENED_SPEED;
+        } else if (this.state === GhostState.EATEN) {
+            this.speed = this.EATEN_SPEED;
+        } else {
+            this.speed = this.normalSpeed;
+            
+            // Réduction de la vitesse dans les tunnels
+            const tileX = Math.floor(this.x / this.maze.getTileSize());
+            const tileY = Math.floor(this.y / this.maze.getTileSize());
+            if (this.maze.isTunnel(tileX, tileY)) {
+                this.speed *= this.TUNNEL_SPEED_MULTIPLIER;
+            }
+        }
+    }
+
+    public setSpeedMultiplier(multiplier: number): void {
+        this.speedMultiplier = multiplier;
+        this.normalSpeed = this.BASE_SPEED * multiplier;
+        this.speed = this.normalSpeed;
     }
 } 

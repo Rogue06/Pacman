@@ -37,7 +37,7 @@ export class Pinky extends Ghost {
         switch (pacmanDir) {
             case Direction.UP:
                 targetY -= this.TILES_AHEAD * tileSize;
-                targetX -= 4 * tileSize; // Bug original du jeu : décalage vers la gauche en montant
+                targetX -= 4 * tileSize; // Bug historique : décalage de 4 cases vers la gauche en montant
                 break;
             case Direction.DOWN:
                 targetY += this.TILES_AHEAD * tileSize;
