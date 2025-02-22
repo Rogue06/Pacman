@@ -18,10 +18,10 @@ export class Pacman extends Entity {
     private nextDirection: Direction = Direction.NONE;
     private readonly TILE_SIZE: number = 16;
     private speedMultiplier: number = 1;
-    private baseSpeed: number = 1.5;
+    private baseSpeed: number = 2.0;
 
     constructor(x: number, y: number, maze: Maze, game: Game) {
-        super(x, y, 16, 16, 1.5); // Vitesse réduite à 1.5 pour un meilleur contrôle
+        super(x, y, 16, 16, 2.0);
         this.maze = maze;
         this.game = game;
         this.inputManager = InputManager.getInstance();
@@ -43,32 +43,11 @@ export class Pacman extends Entity {
 
         // Mise à jour de la direction basée sur l'input
         const inputDirection = this.inputManager.getNextDirection();
-        if (inputDirection !== Direction.NONE) {
-            this.nextDirection = inputDirection;
-        }
-
-        // Alignement sur la grille pour les changements de direction
-        const currentTileX = Math.floor(this.x / this.TILE_SIZE);
-        const currentTileY = Math.floor(this.y / this.TILE_SIZE);
-        const alignedX = currentTileX * this.TILE_SIZE;
-        const alignedY = currentTileY * this.TILE_SIZE;
-        const isAlignedX = Math.abs(this.x - alignedX) < this.speed;
-        const isAlignedY = Math.abs(this.y - alignedY) < this.speed;
-
-        // Essayer d'appliquer la nouvelle direction si on est aligné avec la grille
-        if (this.nextDirection !== Direction.NONE) {
-            if (this.canMove(this.nextDirection, currentTileX, currentTileY)) {
-                if ((this.nextDirection === Direction.UP || this.nextDirection === Direction.DOWN) && isAlignedX) {
-                    this.x = alignedX;
-                    this.direction = this.nextDirection;
-                    this.nextDirection = Direction.NONE;
-                    this.inputManager.clearNextDirection();
-                } else if ((this.nextDirection === Direction.LEFT || this.nextDirection === Direction.RIGHT) && isAlignedY) {
-                    this.y = alignedY;
-                    this.direction = this.nextDirection;
-                    this.nextDirection = Direction.NONE;
-                    this.inputManager.clearNextDirection();
-                }
+        
+        // Si une nouvelle direction est demandée, vérifier si le changement est possible
+        if (inputDirection !== Direction.NONE && inputDirection !== this.direction) {
+            if (this.canChangeDirection(inputDirection)) {
+                this.direction = inputDirection;
             }
         }
 
@@ -78,14 +57,6 @@ export class Pacman extends Entity {
             if (this.canMoveToPosition(nextPos.x, nextPos.y)) {
                 this.x = nextPos.x;
                 this.y = nextPos.y;
-            } else {
-                // Alignement avec la grille si on ne peut pas avancer
-                if (this.direction === Direction.UP || this.direction === Direction.DOWN) {
-                    this.x = alignedX;
-                } else {
-                    this.y = alignedY;
-                }
-                this.direction = Direction.NONE;
             }
         }
 
@@ -108,33 +79,42 @@ export class Pacman extends Entity {
         }
     }
 
-    private canMove(direction: Direction, tileX: number, tileY: number): boolean {
-        switch (direction) {
-            case Direction.UP:
-                return !this.maze.isWall(tileX * this.TILE_SIZE, (tileY - 1) * this.TILE_SIZE);
-            case Direction.DOWN:
-                return !this.maze.isWall(tileX * this.TILE_SIZE, (tileY + 1) * this.TILE_SIZE);
-            case Direction.LEFT:
-                return !this.maze.isWall((tileX - 1) * this.TILE_SIZE, tileY * this.TILE_SIZE);
-            case Direction.RIGHT:
-                return !this.maze.isWall((tileX + 1) * this.TILE_SIZE, tileY * this.TILE_SIZE);
-            default:
-                return false;
+    private canChangeDirection(newDirection: Direction): boolean {
+        const tileX = Math.floor(this.x / this.TILE_SIZE);
+        const tileY = Math.floor(this.y / this.TILE_SIZE);
+        
+        // Vérifier si on est suffisamment aligné avec la grille
+        const alignedX = tileX * this.TILE_SIZE;
+        const alignedY = tileY * this.TILE_SIZE;
+        const isAlignedX = Math.abs(this.x - alignedX) < 2;
+        const isAlignedY = Math.abs(this.y - alignedY) < 2;
+
+        // Pour les changements horizontaux vers verticaux
+        if ((this.direction === Direction.LEFT || this.direction === Direction.RIGHT) &&
+            (newDirection === Direction.UP || newDirection === Direction.DOWN)) {
+            // Doit être aligné horizontalement et avoir un chemin vertical
+            return isAlignedX && !this.maze.isWall(tileX * this.TILE_SIZE, (tileY + (newDirection === Direction.DOWN ? 1 : -1)) * this.TILE_SIZE);
         }
+        
+        // Pour les changements verticaux vers horizontaux
+        if ((this.direction === Direction.UP || this.direction === Direction.DOWN) &&
+            (newDirection === Direction.LEFT || newDirection === Direction.RIGHT)) {
+            // Doit être aligné verticalement et avoir un chemin horizontal
+            return isAlignedY && !this.maze.isWall((tileX + (newDirection === Direction.RIGHT ? 1 : -1)) * this.TILE_SIZE, tileY * this.TILE_SIZE);
+        }
+
+        // Pour les inversions de direction
+        return true;
     }
 
     private canMoveToPosition(x: number, y: number): boolean {
-        const offset = 4; // Utiliser un offset plus petit pour une meilleure maniabilité
+        const centerX = x + this.width / 2;
+        const centerY = y + this.height / 2;
+        const tileX = Math.floor(centerX / this.TILE_SIZE);
+        const tileY = Math.floor(centerY / this.TILE_SIZE);
 
-        const points = [
-            { x: x + this.width / 2, y: y + this.height / 2 }, // Centre
-            { x: x + offset, y: y + offset }, // Coin supérieur gauche
-            { x: x + this.width - offset, y: y + offset }, // Coin supérieur droit
-            { x: x + offset, y: y + this.height - offset }, // Coin inférieur gauche
-            { x: x + this.width - offset, y: y + this.height - offset } // Coin inférieur droit
-        ];
-
-        return !points.some(point => this.maze.isWall(point.x, point.y));
+        // Vérifier le point central
+        return !this.maze.isWall(tileX * this.TILE_SIZE, tileY * this.TILE_SIZE);
     }
 
     private handleTunnel(): void {
@@ -149,9 +129,7 @@ export class Pacman extends Entity {
     private getNextPosition(dir: Direction): { x: number; y: number } {
         let nextX = this.x;
         let nextY = this.y;
-        const tileSize = this.maze.getTileSize();
 
-        // Calculer la prochaine position
         switch (dir) {
             case Direction.UP:
                 nextY -= this.speed;
@@ -170,20 +148,6 @@ export class Pacman extends Entity {
                 this.angle = 0;
                 break;
         }
-
-        // Gestion du tunnel
-        if (nextX < -this.width) {
-            nextX = this.maze.getTileSize() * 27;
-        } else if (nextX > this.maze.getTileSize() * 27) {
-            nextX = -this.width;
-        }
-
-        // Alignement sur la grille uniquement si on est proche du centre d'une tuile
-        const gridX = Math.round(nextX / tileSize) * tileSize;
-        const gridY = Math.round(nextY / tileSize) * tileSize;
-        
-        if (Math.abs(nextX - gridX) < this.speed) nextX = gridX;
-        if (Math.abs(nextY - gridY) < this.speed) nextY = gridY;
 
         return { x: nextX, y: nextY };
     }
@@ -227,5 +191,17 @@ export class Pacman extends Entity {
 
     public getY(): number {
         return this.y;
+    }
+
+    private isAlignedWithGrid(): boolean {
+        const alignmentTolerance = 2;
+        
+        const currentTileX = Math.floor(this.x / this.TILE_SIZE);
+        const currentTileY = Math.floor(this.y / this.TILE_SIZE);
+        const alignedX = currentTileX * this.TILE_SIZE;
+        const alignedY = currentTileY * this.TILE_SIZE;
+        
+        return Math.abs(this.x - alignedX) < alignmentTolerance && 
+               Math.abs(this.y - alignedY) < alignmentTolerance;
     }
 } 
