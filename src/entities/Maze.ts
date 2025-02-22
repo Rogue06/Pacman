@@ -229,4 +229,16 @@ export class Maze {
 
         this.grid[y][x] = newTile;
     }
+
+    public isPath(x: number, y: number): boolean {
+        // Vérifier les limites de la grille
+        if (x < 0 || x >= this.grid[0].length || y < 0 || y >= this.grid.length) {
+            return false;
+        }
+
+        // Un chemin valide est soit un chemin vide (où il y avait une pac-gomme),
+        // soit une tuile avec une pac-gomme ou une super pac-gomme
+        const tile = this.grid[y][x];
+        return tile === TileType.PATH || tile === TileType.DOT || tile === TileType.POWER_PELLET;
+    }
 } 

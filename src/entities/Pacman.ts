@@ -45,22 +45,34 @@ export class Pacman extends Entity {
         const currentTileX = Math.floor(this.x / this.TILE_SIZE);
         const currentTileY = Math.floor(this.y / this.TILE_SIZE);
 
-        // Vérifier les chemins disponibles
-        const canMoveVertical = !this.maze.isWall(currentTileX * this.TILE_SIZE, (currentTileY - 1) * this.TILE_SIZE) ||
-                               !this.maze.isWall(currentTileX * this.TILE_SIZE, (currentTileY + 1) * this.TILE_SIZE);
-        const canMoveHorizontal = !this.maze.isWall((currentTileX - 1) * this.TILE_SIZE, currentTileY * this.TILE_SIZE) ||
-                                 !this.maze.isWall((currentTileX + 1) * this.TILE_SIZE, currentTileY * this.TILE_SIZE);
+        // Vérifier les chemins valides (où il y a/avait des pac-gommes) dans chaque direction
+        const hasPathUp = this.maze.isPath(currentTileX, currentTileY - 1);
+        const hasPathDown = this.maze.isPath(currentTileX, currentTileY + 1);
+        const hasPathLeft = this.maze.isPath(currentTileX - 1, currentTileY);
+        const hasPathRight = this.maze.isPath(currentTileX + 1, currentTileY);
+
+        // Déterminer l'axe actuel basé sur les chemins valides
+        const isOnVerticalPath = hasPathUp || hasPathDown;
+        const isOnHorizontalPath = hasPathLeft || hasPathRight;
 
         // Mise à jour de la direction basée sur l'input
         const inputDirection = this.inputManager.getNextDirection();
         
         if (inputDirection !== Direction.NONE && inputDirection !== this.direction) {
-            // Vérifier si la nouvelle direction est autorisée selon l'axe disponible
             const isVerticalMove = inputDirection === Direction.UP || inputDirection === Direction.DOWN;
             const isHorizontalMove = inputDirection === Direction.LEFT || inputDirection === Direction.RIGHT;
 
-            if ((isVerticalMove && canMoveVertical) || (isHorizontalMove && canMoveHorizontal)) {
-                this.direction = inputDirection;
+            // N'autoriser que les mouvements sur les chemins valides
+            if (isVerticalMove && isOnVerticalPath) {
+                if ((inputDirection === Direction.UP && hasPathUp) ||
+                    (inputDirection === Direction.DOWN && hasPathDown)) {
+                    this.direction = inputDirection;
+                }
+            } else if (isHorizontalMove && isOnHorizontalPath) {
+                if ((inputDirection === Direction.LEFT && hasPathLeft) ||
+                    (inputDirection === Direction.RIGHT && hasPathRight)) {
+                    this.direction = inputDirection;
+                }
             }
         }
 
@@ -168,6 +180,30 @@ export class Pacman extends Entity {
                 break;
         }
 
+        // Ajout d'un alignement progressif sur la grille
+        const currentTileX = Math.floor(this.x / this.TILE_SIZE) * this.TILE_SIZE;
+        const currentTileY = Math.floor(this.y / this.TILE_SIZE) * this.TILE_SIZE;
+
+        if (dir === Direction.LEFT || dir === Direction.RIGHT) {
+            // Alignement vertical progressif
+            if (Math.abs(this.y - currentTileY) < this.speed) {
+                nextY = currentTileY;
+            } else if (this.y > currentTileY) {
+                nextY -= Math.min(this.speed * 0.5, this.y - currentTileY);
+            } else if (this.y < currentTileY) {
+                nextY += Math.min(this.speed * 0.5, currentTileY - this.y);
+            }
+        } else if (dir === Direction.UP || dir === Direction.DOWN) {
+            // Alignement horizontal progressif
+            if (Math.abs(this.x - currentTileX) < this.speed) {
+                nextX = currentTileX;
+            } else if (this.x > currentTileX) {
+                nextX -= Math.min(this.speed * 0.5, this.x - currentTileX);
+            } else if (this.x < currentTileX) {
+                nextX += Math.min(this.speed * 0.5, currentTileX - this.x);
+            }
+        }
+
         return { x: nextX, y: nextY };
     }
 
@@ -177,7 +213,26 @@ export class Pacman extends Entity {
         const tileX = Math.floor(centerX / this.TILE_SIZE);
         const tileY = Math.floor(centerY / this.TILE_SIZE);
 
-        return !this.maze.isWall(tileX * this.TILE_SIZE, tileY * this.TILE_SIZE);
+        // Vérifier si la position centrale est un chemin valide
+        if (!this.maze.isPath(tileX, tileY)) {
+            return false;
+        }
+
+        // Vérifier les points supplémentaires pour une meilleure détection des chemins
+        const offset = 4; // Réduire l'offset pour une meilleure maniabilité
+        const points = [
+            { x: x + offset, y: y + offset },                    // Coin supérieur gauche
+            { x: x + this.width - offset, y: y + offset },       // Coin supérieur droit
+            { x: x + offset, y: y + this.height - offset },      // Coin inférieur gauche
+            { x: x + this.width - offset, y: y + this.height - offset }  // Coin inférieur droit
+        ];
+
+        // Si au moins un des points est sur un chemin valide, autoriser le mouvement
+        return points.some(point => {
+            const pointTileX = Math.floor(point.x / this.TILE_SIZE);
+            const pointTileY = Math.floor(point.y / this.TILE_SIZE);
+            return this.maze.isPath(pointTileX, pointTileY);
+        });
     }
 
     private handleTunnel(): void {
