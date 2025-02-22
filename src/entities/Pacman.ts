@@ -45,33 +45,35 @@ export class Pacman extends Entity {
         const currentTileX = Math.floor(this.x / this.TILE_SIZE);
         const currentTileY = Math.floor(this.y / this.TILE_SIZE);
 
-        // Vérifier les chemins valides (où il y a/avait des pac-gommes) dans chaque direction
+        // Vérifier les chemins valides dans chaque direction
         const hasPathUp = this.maze.isPath(currentTileX, currentTileY - 1);
         const hasPathDown = this.maze.isPath(currentTileX, currentTileY + 1);
         const hasPathLeft = this.maze.isPath(currentTileX - 1, currentTileY);
         const hasPathRight = this.maze.isPath(currentTileX + 1, currentTileY);
 
-        // Déterminer l'axe actuel basé sur les chemins valides
-        const isOnVerticalPath = hasPathUp || hasPathDown;
-        const isOnHorizontalPath = hasPathLeft || hasPathRight;
-
-        // Mise à jour de la direction basée sur l'input
+        // Obtenir la direction souhaitée par le joueur
         const inputDirection = this.inputManager.getNextDirection();
         
+        // Vérifier si on peut tourner
         if (inputDirection !== Direction.NONE && inputDirection !== this.direction) {
-            const isVerticalMove = inputDirection === Direction.UP || inputDirection === Direction.DOWN;
-            const isHorizontalMove = inputDirection === Direction.LEFT || inputDirection === Direction.RIGHT;
-
-            // N'autoriser que les mouvements sur les chemins valides
-            if (isVerticalMove && isOnVerticalPath) {
-                if ((inputDirection === Direction.UP && hasPathUp) ||
-                    (inputDirection === Direction.DOWN && hasPathDown)) {
-                    this.direction = inputDirection;
-                }
-            } else if (isHorizontalMove && isOnHorizontalPath) {
-                if ((inputDirection === Direction.LEFT && hasPathLeft) ||
-                    (inputDirection === Direction.RIGHT && hasPathRight)) {
-                    this.direction = inputDirection;
+            const nextPos = this.getNextPosition(inputDirection);
+            const canTurn = this.canMoveToPosition(nextPos.x, nextPos.y);
+            
+            // Si on est proche du centre de la tuile ou si on peut tourner immédiatement
+            if (this.isNearGridCenter() || canTurn) {
+                switch (inputDirection) {
+                    case Direction.UP:
+                        if (hasPathUp) this.direction = Direction.UP;
+                        break;
+                    case Direction.DOWN:
+                        if (hasPathDown) this.direction = Direction.DOWN;
+                        break;
+                    case Direction.LEFT:
+                        if (hasPathLeft) this.direction = Direction.LEFT;
+                        break;
+                    case Direction.RIGHT:
+                        if (hasPathRight) this.direction = Direction.RIGHT;
+                        break;
                 }
             }
         }
@@ -82,26 +84,15 @@ export class Pacman extends Entity {
             if (this.canMoveToPosition(nextPos.x, nextPos.y)) {
                 this.x = nextPos.x;
                 this.y = nextPos.y;
+            } else {
+                // Si on ne peut pas avancer, on essaie de s'aligner sur la grille
+                this.alignToGrid();
             }
         }
 
-        // Gestion du tunnel
+        // Gestion du tunnel et collecte des points
         this.handleTunnel();
-
-        // Collecte des points
-        const currentTime = Date.now();
-        if (this.maze.consumeDot(this.x + this.width / 2, this.y + this.height / 2)) {
-            this.score += 10;
-            if (currentTime - this.lastDotTime > this.DOT_SOUND_DELAY) {
-                this.soundManager.playSound(SoundEffect.WAKAWAKA);
-                this.lastDotTime = currentTime;
-            }
-        }
-        if (this.maze.consumePowerPellet(this.x + this.width / 2, this.y + this.height / 2)) {
-            this.score += 50;
-            this.soundManager.playSound(SoundEffect.POWER_PELLET);
-            this.game.activatePowerMode();
-        }
+        this.collectPoints();
     }
 
     public render(ctx: CanvasRenderingContext2D): void {
@@ -207,32 +198,40 @@ export class Pacman extends Entity {
         return { x: nextX, y: nextY };
     }
 
-    private canMoveToPosition(x: number, y: number): boolean {
-        const centerX = x + this.width / 2;
-        const centerY = y + this.height / 2;
-        const tileX = Math.floor(centerX / this.TILE_SIZE);
-        const tileY = Math.floor(centerY / this.TILE_SIZE);
+    private isNearGridCenter(): boolean {
+        const gridX = Math.floor(this.x / this.TILE_SIZE) * this.TILE_SIZE + this.TILE_SIZE / 2;
+        const gridY = Math.floor(this.y / this.TILE_SIZE) * this.TILE_SIZE + this.TILE_SIZE / 2;
+        const tolerance = 6; // Augmenter la tolérance pour faciliter les virages
 
-        // Vérifier si la position centrale est un chemin valide
-        if (!this.maze.isPath(tileX, tileY)) {
-            return false;
+        return Math.abs(this.x + this.width / 2 - gridX) < tolerance &&
+               Math.abs(this.y + this.height / 2 - gridY) < tolerance;
+    }
+
+    private alignToGrid(): void {
+        const currentTileX = Math.floor(this.x / this.TILE_SIZE) * this.TILE_SIZE;
+        const currentTileY = Math.floor(this.y / this.TILE_SIZE) * this.TILE_SIZE;
+        
+        if (this.direction === Direction.LEFT || this.direction === Direction.RIGHT) {
+            this.y = currentTileY;
+        } else {
+            this.x = currentTileX;
         }
+    }
 
-        // Vérifier les points supplémentaires pour une meilleure détection des chemins
-        const offset = 4; // Réduire l'offset pour une meilleure maniabilité
-        const points = [
-            { x: x + offset, y: y + offset },                    // Coin supérieur gauche
-            { x: x + this.width - offset, y: y + offset },       // Coin supérieur droit
-            { x: x + offset, y: y + this.height - offset },      // Coin inférieur gauche
-            { x: x + this.width - offset, y: y + this.height - offset }  // Coin inférieur droit
-        ];
-
-        // Si au moins un des points est sur un chemin valide, autoriser le mouvement
-        return points.some(point => {
-            const pointTileX = Math.floor(point.x / this.TILE_SIZE);
-            const pointTileY = Math.floor(point.y / this.TILE_SIZE);
-            return this.maze.isPath(pointTileX, pointTileY);
-        });
+    private collectPoints(): void {
+        const currentTime = Date.now();
+        if (this.maze.consumeDot(this.x + this.width / 2, this.y + this.height / 2)) {
+            this.score += 10;
+            if (currentTime - this.lastDotTime > this.DOT_SOUND_DELAY) {
+                this.soundManager.playSound(SoundEffect.WAKAWAKA);
+                this.lastDotTime = currentTime;
+            }
+        }
+        if (this.maze.consumePowerPellet(this.x + this.width / 2, this.y + this.height / 2)) {
+            this.score += 50;
+            this.soundManager.playSound(SoundEffect.POWER_PELLET);
+            this.game.activatePowerMode();
+        }
     }
 
     private handleTunnel(): void {
@@ -242,5 +241,37 @@ export class Pacman extends Entity {
         } else if (this.x > this.maze.getTileSize() * 27) {
             this.x = -this.width;
         }
+    }
+
+    private canMoveToPosition(x: number, y: number): boolean {
+        const centerX = x + this.width / 2;
+        const centerY = y + this.height / 2;
+        const tileX = Math.floor(centerX / this.TILE_SIZE);
+        const tileY = Math.floor(centerY / this.TILE_SIZE);
+
+        // Vérifier d'abord le centre
+        if (this.maze.isPath(tileX, tileY)) {
+            return true;
+        }
+
+        // Points de vérification pour les virages
+        const offset = 6; // Augmenter légèrement l'offset pour les virages
+        const checkPoints = [
+            { x: x + offset, y: y + offset },                    // Coin supérieur gauche
+            { x: x + this.width - offset, y: y + offset },       // Coin supérieur droit
+            { x: x + offset, y: y + this.height - offset },      // Coin inférieur gauche
+            { x: x + this.width - offset, y: y + this.height - offset },  // Coin inférieur droit
+            { x: x + this.width / 2, y: y + offset },           // Milieu haut
+            { x: x + this.width / 2, y: y + this.height - offset }, // Milieu bas
+            { x: x + offset, y: y + this.height / 2 },          // Milieu gauche
+            { x: x + this.width - offset, y: y + this.height / 2 }  // Milieu droit
+        ];
+
+        // Si un des points de vérification est sur un chemin valide, autoriser le mouvement
+        return checkPoints.some(point => {
+            const pointTileX = Math.floor(point.x / this.TILE_SIZE);
+            const pointTileY = Math.floor(point.y / this.TILE_SIZE);
+            return this.maze.isPath(pointTileX, pointTileY);
+        });
     }
 } 
